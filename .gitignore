@@ -1,0 +1,5 @@
+out/
+lib/*.jar
+/screenshots/
+/demo-evidence/
+db.properties

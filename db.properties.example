@@ -1,0 +1,10 @@
+# Pathivu database settings
+# The app always connects as pathivu_app (no DELETE, no DROP, no user creation).
+db.url=jdbc:mysql://localhost:3306/pathivu?allowPublicKeyRetrieval=true&useSSL=false
+db.user=pathivu_app
+db.password=change-me-Pathivu-2026
+
+# Used only by pathivu.tools.Setup to create user accounts.
+admin.url=jdbc:mysql://localhost:3306/pathivu?allowPublicKeyRetrieval=true&useSSL=false
+admin.user=root
+admin.password=YOUR_ROOT_PASSWORD
