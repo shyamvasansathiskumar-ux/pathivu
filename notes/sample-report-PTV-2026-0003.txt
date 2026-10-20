@@ -1,0 +1,60 @@
+PATHIVU INCIDENT REPORT  PTV-2026-0003
+======================================
+Generated 19 Oct 2026, 07:00 IST
+
+Triage model ranked samples from rural clinics lower
+Kind: MODEL_HARM   Severity: MEDIUM   Status: CLOSED
+System: Triage score model (Kuyil Health Labs)
+Reported by: Meera Iyer
+Adversary: NONE   Cyber security incident: NO
+
+Occurred  14 Oct 2026, 07:00 IST
+Detected  16 Oct 2026, 05:30 IST
+Aware     16 Oct 2026, 07:00 IST   (all legal clocks start here)
+  Why aware came later than detection: Found by the night-shift lab technician; the clinical lead was told when the morning shift began
+
+Weekly review found that samples sent from rural partner clinics were scored as less urgent than identical urban samples.
+biased decision affecting patients of rural partner clinics
+
+HARM
+----
+- DISCRIMINATION: Urgent samples from rural clinics processed up to a day late | affected 212 | personal data NO
+
+FRAMEWORK MAPPINGS (confirmed)
+------------------------------
+OWASP Agentic Top 10   (not confirmed)
+OWASP LLM Top 10       (not confirmed)
+MITRE ATLAS            NONE No applicable technique (no adversary involved)
+NIST AI RMF            MANAGE Manage: risks prioritised and acted on; MEASURE Measure: risks analysed and tracked
+
+LEGAL OBLIGATIONS
+-----------------
+CERTIN_6H → CERT-In, 6 hours
+  due 16 Oct 2026, 13:00 IST  status RULED_OUT
+  ruled out by Arjun Rao: Not a cyber security incident under the CERT-In Directions: no unauthorised access or compromise.
+  CERT-In Directions under s.70B(6) IT Act, 28 Apr 2022, para (ii): report within 6 hours of noticing
+
+EVIDENCE (SHA-256 at time of attachment)
+----------------------------------------
+- Sample of the harmful output: triage-scores.csv
+  652c3ec5b9e3a99303eedac7b40131a8645c654015cc0f1ae87a1cc3ff09c135
+Expected for this kind: Sample of the harmful output, Model name and version
+
+HISTORY
+-------
+19 Oct 2026, 07:00 IST  Meera Iyer  INCIDENT_REPORTED  PTV-2026-0003 MODEL_HARM "Triage model ranked samples from rural clinics lower" aware 16 Oct 2026, 07:00 IST
+19 Oct 2026, 07:00 IST  Meera Iyer  CLOCK_STARTED  CERTIN_6H (6 hours) due 16 Oct 2026, 13:00 IST
+19 Oct 2026, 07:00 IST  Meera Iyer  MAPPINGS_SUGGESTED  3 suggestion(s) waiting for a reviewer
+19 Oct 2026, 07:00 IST  Meera Iyer  HARM_RECORDED  DISCRIMINATION: Urgent samples from rural clinics processed up to a day late (personal data: NO)
+19 Oct 2026, 07:00 IST  Meera Iyer  EVIDENCE_ADDED  Sample of the harmful output: triage-scores.csv sha256=652c3ec5b9e3a99303eedac7b40131a8645c654015cc0f1ae87a1cc3ff09c135
+19 Oct 2026, 07:00 IST  Arjun Rao  STATUS_CHANGED  REPORTED -> TRIAGED
+19 Oct 2026, 07:00 IST  Arjun Rao  INCIDENT_AMENDED  cyber_incident: UNSURE -> NO because No system was compromised; this is a model quality and fairness failure.
+19 Oct 2026, 07:00 IST  Arjun Rao  CLOCK_RULED_OUT  CERTIN_6H: Not a cyber security incident under the CERT-In Directions: no unauthorised access or compromise.
+19 Oct 2026, 07:00 IST  Arjun Rao  MAPPING_CONFIRMED  MITRE ATLAS NONE
+19 Oct 2026, 07:00 IST  Arjun Rao  MAPPING_CONFIRMED  NIST AI RMF MANAGE
+19 Oct 2026, 07:00 IST  Arjun Rao  MAPPING_CONFIRMED  NIST AI RMF MEASURE
+19 Oct 2026, 07:00 IST  Arjun Rao  STATUS_CHANGED  TRIAGED -> ASSESSED
+19 Oct 2026, 07:00 IST  Arjun Rao  STATUS_CHANGED  ASSESSED -> NOTICES_REVIEWED
+19 Oct 2026, 07:00 IST  Kavya Nair  STATUS_CHANGED  NOTICES_REVIEWED -> CLOSED
+
+This report is generated from the register. It is not legal advice.
