@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathivu · the AI incident register that watches the legal clock</title>
+<meta name="description" content="Pathivu (பதிவு, Tamil for record) is a Java and MySQL incident register for AI failures. It maps each incident to OWASP, MITRE ATLAS and NIST, and runs India's reporting deadlines from the moment the organisation became aware. Try the rule engine live in your browser.">
+<meta name="theme-color" content="#e8e1d3">
+<meta property="og:title" content="Pathivu · the AI incident register that watches the legal clock">
+<meta property="og:description" content="When an AI system breaks something, a legal clock may already be running. Java, MySQL, 28 triggers, 66 tests. By Shyam Kumar.">
+<meta property="og:image" content="https://shyamvasansathiskumar-ux.github.io/pathivu/og.jpg">
+<meta property="og:url" content="https://shyamvasansathiskumar-ux.github.io/pathivu/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://shyamvasansathiskumar-ux.github.io/pathivu/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23e8e1d3'/%3E%3Crect x='17' y='14' width='30' height='36' rx='4' fill='%239e1b32'/%3E%3Crect x='23' y='22' width='18' height='3' fill='%23f4efe6'/%3E%3Crect x='23' y='29' width='18' height='3' fill='%23f4efe6'/%3E%3Crect x='23' y='36' width='11' height='3' fill='%23f4efe6'/%3E%3C/svg%3E">
+<link rel="preload" href="cormorant.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="geist.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="site.css">
+<script>document.documentElement.classList.add("js")</script>
+<script type="importmap">{ "imports": { "three": "./three.module.min.js" } }</script>
+</head>
+<body>
+<div class="loader" aria-hidden="true">
+  <div class="who"><span class="label bare">Pathivu · பதிவு</span><span class="label bare">Shyam Kumar</span></div>
+  <div class="n"><b>00</b><sup>%</sup></div>
+</div>
+<canvas id="world" aria-hidden="true"></canvas>
+<ol class="rail" aria-label="Chapters"></ol>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="dot"></span>Pathivu <span class="tamil">பதிவு</span></a>
+    <ul>
+      <li><a href="#try">Try it</a></li>
+      <li><a href="#law">The law</a></li>
+      <li><a href="#refused">The database</a></li>
+      <li><a href="#tamper">Tamper lab</a></li>
+      <li><a href="#proof">Proof</a></li>
+    </ul>
+    <a class="btn sm ghost" href="https://github.com/shyamvasansathiskumar-ux/pathivu" target="_blank" rel="noopener">Source <span class="arr">↗</span></a>
+  </div>
+</header>
+
+<main id="top">
+  <!-- 00 · hero -->
+  <section class="hero" id="hero" data-stage="0" data-chapter="Pathivu">
+    <div class="wrap hero-in">
+      <p class="label" data-intro>AI incident register · Java · MySQL · JDBC</p>
+      <h1 class="display hero-title" data-intro-split>Pathi<em>vu</em></h1>
+      <p class="hero-tamil" data-intro><span class="tamil">பதிவு</span> <span class="sep"></span> Tamil for <em>record</em></p>
+      <div class="hero-foot">
+        <p class="lede" data-intro>When an AI system breaks something, <strong>a legal clock may already be running.</strong> Pathivu keeps the record, maps the failure to the frameworks, and watches the clock.</p>
+        <div class="hero-code card clockcard" data-intro aria-live="off">
+          <span class="label bare">Demo · CERT-In, 6 hours</span>
+          <b class="code" id="heroLeft">–h ––m</b>
+          <svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17"/><circle class="arc" id="heroArc" cx="20" cy="20" r="17"/></svg>
+          <span class="secs mono" id="heroDue">due –</span>
+        </div>
+      </div>
+      <div class="hero-cta" data-intro>
+        <a class="btn acc" href="#try">File an incident in your browser <span class="arr">→</span></a>
+        <a class="btn ghost" href="#refused">See the database refuse</a>
+      </div>
+    </div>
+    <div class="wrap hero-meta" data-intro>
+      <span class="label bare">66 tests</span><span class="label bare">28 triggers</span><span class="label bare">≈3,600 lines of Java</span><span class="label bare scroll-cue">Scroll</span>
+    </div>
+  </section>
+
+  <!-- 01 · problem -->
+  <section id="problem" data-stage="1" data-chapter="The problem">
+    <div class="wrap grid">
+      <div class="col-l">
+        <p class="label" data-scramble>01 · The problem</p>
+      </div>
+      <div class="col-r stack">
+        <h2 class="h1" data-split>Nobody attacked. <em>The clock started anyway.</em></h2>
+        <p class="body big" data-rise>An AI coding agent drops a production database. A support bot reads out other customers' phone numbers. A triage model quietly ranks rural patients lower. None of these needs an attacker, and in India each can start a reporting duty: six hours to CERT-In for a cyber security incident today, and from 13 May 2027, "without delay" to affected people and the Data Protection Board under DPDP Rule 7.</p>
+        <div class="trio" data-stagger>
+          <div class="card t"><span class="n">i.</span><h3 class="h3">AI incident databases</h3><p>Understand how AI fails. They are research archives, not tools for answering a deadline.</p></div>
+          <div class="card t"><span class="n">ii.</span><h3 class="h3">Indian compliance tools</h3><p>Track the 6-hour and 72-hour deadlines. They don't know an agent from a model.</p></div>
+          <div class="card t acc"><span class="n">iii.</span><h3 class="h3">Pathivu joins them</h3><p>One record: the AI failure on one side, India's dated legal duties on the other, a named reviewer in between.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="marquee" aria-hidden="true"><div class="track" data-speed="44"><span>CERT-In · 6 hours</span><span>DPDP Rule 7 · 13 May 2027</span><span>OWASP Agentic 2026</span><span>OWASP LLM 2026</span><span>MITRE ATLAS</span><span>NIST AI RMF</span><span>SHA-256 chain</span></div></div>
+
+  <!-- 02 · four layers -->
+  <section id="layers" data-stage="2" data-chapter="Four layers">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="label" data-scramble>02 · How it works</p>
+        <h2 class="h1" data-split>Four questions, <em>kept apart.</em></h2>
+        <p class="body" data-rise>The deletion is the incident. The lost bookings are the harm. The over-wide credential is the cause. The reporting duty is a separate legal question. Mixing them is how deadlines get missed.</p>
+      </div>
+      <div class="layers" data-stagger>
+        <article class="card layer"><span class="num">1</span><span class="label bare">Record</span><h3 class="h3">What happened</h3><p>Three times kept apart: occurred, detected, and <b>aware</b>, which starts every clock and can never be edited. Harms, evidence fingerprinted with SHA-256.</p></article>
+        <article class="card layer"><span class="num">2</span><span class="label bare">Map</span><h3 class="h3">Why it happened</h3><p>Code suggests categories in four versioned frameworks, each with a reason. Only a reviewer can confirm one. "No attacker" is recorded as an explicit ATLAS NONE.</p></article>
+        <article class="card layer"><span class="num">3</span><span class="label bare">Clock</span><h3 class="h3">What the law asks</h3><p>Every rule carries the date it came into force. A clock is never moved or deleted: it is met by a sent notice, or ruled out by a reviewer in writing.</p></article>
+        <article class="card layer"><span class="num">4</span><span class="label bare">Audit</span><h3 class="h3">Who did what</h3><p>Every action is hash-chained. MySQL recomputes each hash on insert and refuses edits and deletes. An anchor saved outside the database catches even a full rewrite.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 · try it -->
+  <section id="try" data-stage="3" data-chapter="Try it">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="label" data-scramble>03 · Try it</p>
+        <h2 class="h1" data-split>File an incident. <em>Watch the duties appear.</em></h2>
+        <p class="body" data-rise>This is the Java rule engine, the four mappers and the workflow, ported line by line to JavaScript and checked against the Java output in <a href="#proof">Proof</a>. Nothing leaves this page.</p>
+      </div>
+      <div class="sim">
+        <form class="tool card" id="simForm" data-rise autocomplete="off">
+          <div class="field"><span>Kind</span>
+            <div class="seg" id="kind" role="radiogroup">
+              <button type="button" class="chip on" data-v="AGENT" role="radio" aria-checked="true">Agent</button>
+              <button type="button" class="chip" data-v="MODEL_HARM" role="radio" aria-checked="false">Model harm</button>
+              <button type="button" class="chip" data-v="DATA" role="radio" aria-checked="false">Data</button>
+            </div>
+          </div>
+          <label class="field"><span>What happened</span><input class="input" id="title" value="Coding agent dropped the production bookings database"></label>
+          <div class="field"><span>Organisation became aware (IST)</span>
+            <input class="input" id="aware" type="datetime-local">
+            <div class="presets"><span class="label bare">Set</span>
+              <button type="button" class="chip" data-ago="120">2 h ago</button>
+              <button type="button" class="chip" data-ago="540">9 h ago</button>
+              <button type="button" class="chip" data-at="2027-06-01T10:00">1 Jun 2027</button>
+              <button type="button" class="chip" data-at="2022-03-01T10:00">1 Mar 2022</button>
+            </div>
+          </div>
+          <div class="two">
+            <label class="field"><span>Was anyone attacking?</span><select class="input" id="adversary"><option value="NONE">No</option><option value="SUSPECTED">Suspected</option><option value="CONFIRMED">Confirmed</option></select></label>
+            <label class="field"><span>Cyber security incident?</span><select class="input" id="cyber"><option value="UNSURE">Unsure</option><option value="YES">Yes</option><option value="NO">No</option></select></label>
+          </div>
+          <div class="kindbox" data-kind="AGENT">
+            <label class="check"><input type="checkbox" id="cred" checked> It held access beyond what the task needed</label>
+            <label class="check"><input type="checkbox" id="confirm"> A human had to approve destructive actions</label>
+          </div>
+          <div class="kindbox" data-kind="MODEL_HARM" hidden>
+            <label class="field"><span>Output type</span><select class="input" id="output"><option>MISINFORMATION</option><option>BIASED_DECISION</option><option>HARMFUL_CONTENT</option><option>OTHER</option></select></label>
+          </div>
+          <div class="kindbox" data-kind="DATA" hidden>
+            <label class="field"><span>Records affected</span><input class="input" id="records" type="number" min="0" value="37"></label>
+          </div>
+          <div class="field"><span>Harms</span>
+            <ul class="harms" id="harms"></ul>
+            <div class="row gap harm-add">
+              <select class="input" id="hcat"><option>DATA_LOSS</option><option>DATA_EXPOSURE</option><option>SERVICE_OUTAGE</option><option>FINANCIAL</option><option>DISCRIMINATION</option><option>SAFETY</option><option>REPUTATION</option><option>OTHER</option></select>
+              <select class="input" id="hpd" aria-label="Personal data involved?"><option value="YES">personal data: yes</option><option value="UNSURE">personal data: unsure</option><option value="NO">personal data: no</option></select>
+              <button type="button" class="btn sm" id="addHarm">Add</button>
+            </div>
+          </div>
+          <div class="field"><span>Tags</span>
+            <div class="seg wrapchips" id="tags">
+              <button type="button" class="chip" data-v="prompt-injection" aria-pressed="false">prompt-injection</button>
+              <button type="button" class="chip" data-v="jailbreak" aria-pressed="false">jailbreak</button>
+              <button type="button" class="chip" data-v="poisoning" aria-pressed="false">poisoning</button>
+              <button type="button" class="chip" data-v="system-prompt" aria-pressed="false">system-prompt</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="out" data-rise>
+          <div class="card outcard">
+            <div class="outhead"><span class="label bare">Legal clocks</span><span class="mono small" id="refcode">PTV-DEMO-0001</span></div>
+            <ul class="clocks" id="clocks" aria-live="polite"></ul>
+            <p class="fine">Unsure counts as yes: a clock keeps running until a named reviewer rules it out in writing.</p>
+          </div>
+          <div class="card outcard">
+            <div class="outhead"><span class="label bare">Suggested mappings</span><span class="pill ask">needs a reviewer</span></div>
+            <div class="maps" id="maps"></div>
+          </div>
+          <div class="card outcard">
+            <div class="outhead"><span class="label bare">Can a reviewer move it to Assessed?</span></div>
+            <div class="row gap toggles">
+              <label class="check"><input type="checkbox" id="fEvidence"> evidence attached</label>
+              <label class="check"><input type="checkbox" id="fConfirmed"> a mapping confirmed</label>
+            </div>
+            <ul class="blockers" id="blockers"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 · the law has dates -->
+  <section id="law" data-stage="4" data-chapter="The law">
+    <div class="wrap grid">
+      <div class="col-l stack">
+        <p class="label" data-scramble>04 · Rules have start dates</p>
+        <h2 class="h2" data-split>The same incident, <em>on a different day.</em></h2>
+        <p class="body" data-rise>A tool that starts a DPDP clock in October 2026 is giving wrong legal guidance: Rule 7 is not in force until 13 May 2027. Every rule in Pathivu is a row with an <code>effective_from</code>, and the database itself refuses a clock for a rule that wasn't law on the awareness date.</p>
+        <p class="body" data-rise>Drag the date. The incident stays the same: a data leak, personal data involved, cyber answer unsure.</p>
+      </div>
+      <div class="col-r">
+        <div class="tool card timecard" data-rise>
+          <div class="when"><span class="label bare">Aware</span><b class="mono" id="tmWhen">–</b></div>
+          <input type="range" id="tm" min="0" max="1000" value="600" aria-label="Awareness date">
+          <div class="ticks mono"><span>2022</span><span>2023</span><span>2024</span><span>2025</span><span>2026</span><span>2027</span><span>2028</span></div>
+          <ul class="tmrules" id="tmRules"></ul>
+          <p class="fine">Window lengths and start dates are from the CERT-In Directions of 28 Apr 2022 and the DPDP Rules 2025 (G.S.R. 846(E), 13 Nov 2025). A summary, not legal advice.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 · refused -->
+  <section id="refused" class="ink-band" data-stage="5" data-chapter="The database">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="label" data-scramble>05 · Rules live in the database</p>
+        <h2 class="h1" data-split>Java asks nicely. <em>MySQL says no.</em></h2>
+        <p class="body" data-rise>Every important rule is enforced twice: in Java for a clear message, and in MySQL with constraints, 28 triggers and a restricted account, so a bug, a SQL injection or someone typing SQL by hand still can't break it. Below are real attacks from the test suite, run as the app's own database account, with MySQL's actual replies.</p>
+      </div>
+      <div class="refusals" id="refusals" data-rise></div>
+    </div>
+  </section>
+
+  <!-- 06 · tamper lab -->
+  <section id="tamper" data-stage="6" data-chapter="Tamper lab">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="label" data-scramble>06 · Tamper lab</p>
+        <h2 class="h1" data-split>Change one word of history. <em>Watch it show.</em></h2>
+        <p class="body" data-rise>This is the real audit trail of the demo database: <span id="evCount">–</span> events, each holding the SHA-256 of the one before it. Your browser re-checks every hash with the same formula Java uses. Edit an event, then try to cover it up the way someone with root access could.</p>
+      </div>
+      <div class="lab">
+        <div class="tool card labctl" data-rise>
+          <ol class="steps">
+            <li><button class="btn" id="tEdit">1 · Edit event <span id="tEditId">25</span></button><p class="fine">Rewrites a ruled-out clock's reason to "never mind".</p></li>
+            <li><button class="btn" id="tRehash">2 · Re-hash everything after it</button><p class="fine">What root could do: recompute every later hash so the chain links again.</p></li>
+            <li><button class="btn acc" id="tAnchor">3 · Check the anchor</button><p class="fine">An anchor is the newest hash, saved outside the database before the attack.</p></li>
+            <li><button class="btn ghost" id="tReset">Reset</button></li>
+          </ol>
+          <p class="msg" id="tMsg" aria-live="polite">Chain not checked yet.</p>
+          <div class="anchor mono" id="tAnchorText"></div>
+        </div>
+        <div class="chain card" data-rise>
+          <table>
+            <thead><tr><th>#</th><th>Who</th><th>Action</th><th>Details</th><th>Hash</th><th></th></tr></thead>
+            <tbody id="chainRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 · proof -->
+  <section id="proof" data-stage="7" data-chapter="Proof">
+    <div class="wrap grid">
+      <div class="col-l stack">
+        <p class="label" data-scramble>07 · Proof</p>
+        <div class="tally"><b id="passed">–</b><span id="tallytext">cases checked in this browser</span></div>
+        <p class="body" data-rise>The Java engine generated <span id="caseCount">240</span> random incidents, from 2022 to 2027, and wrote down its answers: which clocks start and when they fall due, which mappings it suggests, and what blocks the next workflow step. The JavaScript on this page has just answered the same cases. They have to match exactly.</p>
+        <p class="body" data-rise>The Java project itself runs <b>66 tests</b>: 19 on the logic, 16 on the services against MySQL, and 31 attacks on the database.</p>
+      </div>
+      <div class="col-r">
+        <div class="vectors card" data-rise>
+          <table>
+            <thead><tr><th>Case</th><th>Clocks</th><th>Mappings</th><th>Workflow</th><th></th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="wrap shots" data-stagger>
+      <figure class="card"><img src="shot-deadlines.webp" alt="Deadlines screen: one CERT-In clock overdue, one running with about four hours left, one met late, one ruled out" loading="lazy" width="960" height="585"><figcaption>Deadlines, worked out live from the view <code>v_clock_status</code>.</figcaption></figure>
+      <figure class="card"><img src="shot-incident1-tab3.webp" alt="Mappings tab of an agent incident: seven suggestions across four frameworks, each with a reason" loading="lazy" width="960" height="615"><figcaption>Suggestions wait for a reviewer. ATLAS says NONE: there was no attacker.</figcaption></figure>
+      <figure class="card"><img src="shot-incident2-tab4.webp" alt="Deadlines and notices tab: an overdue CERT-In clock and a draft notice waiting for approval" loading="lazy" width="960" height="615"><figcaption>Draft, approve (someone else), send. The send time is the database's.</figcaption></figure>
+      <figure class="card"><img src="shot-register.webp" alt="The register: four demo incidents with severity and status" loading="lazy" width="960" height="585"><figcaption>The register. Swing, plain JDBC, no framework.</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- 08 · run it -->
+  <section id="run" data-stage="8" data-chapter="Run it">
+    <div class="wrap grid">
+      <div class="col-l stack">
+        <p class="label" data-scramble>08 · Run it</p>
+        <h2 class="h2" data-split>Java 21, MySQL 8. <em>One jar to add.</em></h2>
+        <p class="body" data-rise>An OOP and DBMS semester project at Rajalakshmi Engineering College. The only dependency is the MySQL JDBC driver. Four demo users show the roles: a reporter, two reviewers for four-eyes approval, and a read-only auditor.</p>
+        <div class="limits card" data-rise>
+          <p class="label bare">What it does not do</p>
+          <p>It does not decide whether the law was broken: it starts clocks cautiously and a named reviewer decides. It does not email regulators: a person submits the notice and records that it went. Mapping suggestions are rules, not AI. Sector regulators such as RBI and SEBI are not added yet. Legal points are research summaries, not legal advice.</p>
+        </div>
+      </div>
+      <div class="col-r">
+<pre class="term" data-rise><span class="dim">$</span> mysql -u root -p &lt; db/schema.sql   <span class="dim"># 21 tables, 28 triggers, 2 views</span>
+<span class="dim">$</span> mysql -u root -p &lt; db/seed.sql
+<span class="dim">$</span> mysql -u root -p &lt; db/grants.sql   <span class="dim"># the app gets no DELETE, ever</span>
+<span class="dim">$</span> scripts/build.sh
+<span class="dim">$</span> java -cp "out:lib/*" pathivu.tools.Setup
+<span class="dim">$</span> java -cp "out:lib/*" pathivu.tools.DemoSeeder
+<span class="dim">$</span> scripts/test.sh
+  PASS  cannot change aware_at
+  PASS  cannot start a DPDP clock before Rule 7 is in force
+  PASS  a full re-hashed rewrite by root fools verify() but not a saved anchor
+  <span class="ok">66 passed, 0 failed</span>
+<span class="dim">$</span> scripts/run.sh                      <span class="dim"># sign in as arjun</span></pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="big">Pathi<em>vu</em>.</p>
+    <div class="row">
+      <div class="links">
+        <a class="btn acc" href="https://github.com/shyamvasansathiskumar-ux/pathivu" target="_blank" rel="noopener">Source on GitHub <span class="arr">↗</span></a>
+        <a class="btn ghost" href="https://shyamvasansathiskumar-ux.github.io/kaaval/">Kaaval, the agent guard <span class="arr">→</span></a>
+        <a class="btn ghost" href="https://shyamvasansathiskumar-ux.github.io/">All projects <span class="arr">→</span></a>
+      </div>
+      <small>Shyam Kumar · REC Chennai · 2026<br>Built with Claude as a pair programmer. MIT licence.</small>
+    </div>
+  </div>
+</footer>
+
+<script src="gsap.min.js"></script>
+<script src="ScrollTrigger.min.js"></script>
+<script src="SplitText.min.js"></script>
+<script src="ScrambleTextPlugin.min.js"></script>
+<script src="lenis.min.js"></script>
+<script src="motion.js"></script>
+<script src="pathivu-core.js"></script>
+<script src="app.js"></script>
+<script type="module" src="scene.js"></script>
+</body>
+</html>
