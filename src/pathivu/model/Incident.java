@@ -35,9 +35,12 @@ public abstract class Incident {
     private final Set<String> tags = new LinkedHashSet<>();
     private String awareGapReason;        // needed when aware is more than an hour after detection
     private Integer linkedTo;             // an earlier incident this one follows up
+    private String lateReportReason;      // needed when awareness was more than 7 days before the report
 
     /** Delaying awareness delays every legal clock, so a gap over this needs a written reason. */
     public static final long MAX_UNEXPLAINED_GAP_MINUTES = 60;
+    /** Pass 3: reporting more than 7 days after awareness needs a reason (CHECK ck_late_report). */
+    public static final long MAX_UNEXPLAINED_LATE_DAYS = 7;
 
     protected Incident(String title, String description, int aiSystemId, int reportedBy,
                        Instant occurredAt, Instant detectedAt, Instant awareAt,
@@ -84,6 +87,16 @@ public abstract class Incident {
 
     public String getAwareGapReason() { return awareGapReason; }
     public Integer getLinkedTo() { return linkedTo; }
+    public String getLateReportReason() { return lateReportReason; }
+
+    /** An "aware" date far in the past could put the incident before a rule was in force. */
+    public boolean needsLateReason(java.time.Instant reportedAt) {
+        return java.time.Duration.between(awareAt, reportedAt).toDays() > MAX_UNEXPLAINED_LATE_DAYS;
+    }
+    public void setLateReportReason(String reason) {
+        if (id != 0) throw new IllegalStateException("Already saved; record an amendment instead");
+        this.lateReportReason = reason == null || reason.isBlank() ? null : reason.trim();
+    }
 
     public boolean needsGapReason() {
         return java.time.Duration.between(detectedAt, awareAt).toMinutes() > MAX_UNEXPLAINED_GAP_MINUTES;
@@ -104,10 +117,15 @@ public abstract class Incident {
         if (needsGapReason() && (awareGapReason == null || awareGapReason.length() < 20))
             throw new IllegalArgumentException("The organisation became aware more than an hour after detection. "
                 + "Explain the gap (at least 20 characters): every legal clock starts at awareness.");
+        if (needsLateReason(java.time.Instant.now()) && (lateReportReason == null || lateReportReason.length() < 20))
+            throw new IllegalArgumentException("The organisation became aware more than " + MAX_UNEXPLAINED_LATE_DAYS
+                + " days ago. Explain why it is being reported only now (at least 20 characters).");
     }
 
     /** Used by the DAO when loading. */
-    public void restoreExtras(String gapReason, Integer link) { this.awareGapReason = gapReason; this.linkedTo = link; }
+    public void restoreExtras(String gapReason, String lateReason, Integer link) {
+        this.awareGapReason = gapReason; this.lateReportReason = lateReason; this.linkedTo = link;
+    }
 
     // ---- setters only for what is allowed to change ----
 
