@@ -12,13 +12,13 @@ public class LoginDao {
     }
 
     /**
-     * Failures for this username in the last `minutes`, counted only after the last success
-     * (signing in correctly resets the count).
+     * Failures for this username in the last `minutes`. Pass 3: a success no longer resets
+     * the count. The app account can insert rows, so a forged "success" row would otherwise
+     * wipe out an attacker's failures and reopen the account to guessing.
      */
     public int recentFailures(Connection c, String username, int minutes) throws SQLException {
         String sql = "SELECT COUNT(*) FROM login_attempt a WHERE a.username = ? AND NOT a.success "
-                   + "AND a.at > UTC_TIMESTAMP(3) - INTERVAL ? MINUTE "
-                   + "AND a.at > COALESCE((SELECT MAX(s.at) FROM login_attempt s WHERE s.username = a.username AND s.success), '1970-01-01')";
+                   + "AND a.at > UTC_TIMESTAMP(3) - INTERVAL ? MINUTE";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, cut(username)); ps.setInt(2, minutes);
             try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getInt(1); }

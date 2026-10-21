@@ -18,8 +18,8 @@ public class IncidentDao {
     public int insert(Connection c, Incident i) throws SQLException {
         i.validateForSave();
         String sql = "INSERT INTO incident (kind, title, description, ai_system_id, reported_by, occurred_at, "
-                   + "detected_at, aware_at, severity, adversary, cyber_incident, aware_gap_reason, linked_to) "
-                   + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                   + "detected_at, aware_at, severity, adversary, cyber_incident, aware_gap_reason, linked_to, late_report_reason) "
+                   + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         int id;
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, i.kind().name());
@@ -35,6 +35,7 @@ public class IncidentDao {
             ps.setString(11, i.getCyberIncident().name());
             ps.setString(12, i.getAwareGapReason());
             Jdbc.setIntOrNull(ps, 13, i.getLinkedTo());
+            ps.setString(14, i.getLateReportReason());
             ps.executeUpdate();
             id = Jdbc.generatedId(ps);
         }
@@ -142,7 +143,7 @@ public class IncidentDao {
         i.assignIdentity(rs.getInt("incident_id"), rs.getString("ref_code"));
         i.restoreStatus(IncidentStatus.valueOf(rs.getString("status")));
         i.setCyberIncident(TriState.valueOf(rs.getString("cyber_incident")));
-        i.restoreExtras(rs.getString("aware_gap_reason"), Jdbc.intOrNull(rs, "linked_to"));
+        i.restoreExtras(rs.getString("aware_gap_reason"), rs.getString("late_report_reason"), Jdbc.intOrNull(rs, "linked_to"));
         return i;
     }
 
@@ -152,7 +153,7 @@ public class IncidentDao {
 
     /** Only for fields the database allows to change. The trigger demands an amendment row first. */
     public void updateField(Connection c, int id, String column, String value) throws SQLException {
-        if (!List.of("title", "description", "severity", "cyber_incident").contains(column))
+        if (!List.of("title", "description", "severity", "cyber_incident", "adversary").contains(column))
             throw new IllegalArgumentException(column + " cannot be changed");
         update(c, "UPDATE incident SET " + column + " = ? WHERE incident_id = ?", value, id);   // column is whitelisted above
     }
