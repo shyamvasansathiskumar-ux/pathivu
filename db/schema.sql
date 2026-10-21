@@ -83,6 +83,7 @@ CREATE TABLE incident (
     adversary      ENUM('NONE','SUSPECTED','CONFIRMED') NOT NULL,
     cyber_incident ENUM('YES','NO','UNSURE') NOT NULL DEFAULT 'UNSURE',   -- CERT-In question
     aware_gap_reason VARCHAR(400) NULL,         -- required if the organisation became aware > 1 hour after detection
+    late_report_reason VARCHAR(400) NULL,       -- required if awareness was more than 7 days before the report
     linked_to      INT NULL,                    -- a closed incident is never reopened; a follow-up links to it
     created_at     DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
     CONSTRAINT fk_incident_system   FOREIGN KEY (ai_system_id) REFERENCES ai_system(ai_system_id),
@@ -94,6 +95,13 @@ CREATE TABLE incident (
                                            OR COALESCE(CHAR_LENGTH(TRIM(aware_gap_reason)), 0) >= 20),
     -- COALESCE matters: with a NULL reason the test would be NULL, and a CHECK only
     -- rejects FALSE. Without it, a missing reason would silently pass (a test caught this).
+    -- Pass 3: an "aware" date long before the report would put the incident before
+    -- a rule was in force and start no clock at all. Over 7 days old needs a reason.
+    CONSTRAINT ck_late_report       CHECK (TIMESTAMPDIFF(DAY, aware_at, created_at) <= 7
+                                           OR COALESCE(CHAR_LENGTH(TRIM(late_report_reason)), 0) >= 20),
+    -- Pass 3: with strict mode off, a bad date is stored as 0000-00-00. This catches
+    -- it whatever the session's sql_mode.
+    CONSTRAINT ck_incident_dates    CHECK (occurred_at >= '2000-01-01'),
     INDEX ix_incident_status (status),
     INDEX ix_incident_aware  (aware_at)
 );
@@ -136,8 +144,8 @@ CREATE TABLE incident_amendment (
     amendment_id INT AUTO_INCREMENT PRIMARY KEY,
     incident_id  INT NOT NULL,
     field_name   VARCHAR(40)  NOT NULL,
-    old_value    VARCHAR(255) NULL,
-    new_value    VARCHAR(255) NULL,
+    old_value    TEXT NULL,                     -- TEXT: a description can be longer than 255 characters
+    new_value    TEXT NULL,
     reason       VARCHAR(255) NOT NULL,
     amended_by   INT NOT NULL,
     amended_at   DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
@@ -286,7 +294,8 @@ CREATE TABLE notification (
     CONSTRAINT fk_notice_drafter  FOREIGN KEY (drafted_by)  REFERENCES app_user(user_id),
     CONSTRAINT fk_notice_approver FOREIGN KEY (approved_by) REFERENCES app_user(user_id),
     CONSTRAINT ck_notice_four_eyes CHECK (approved_by IS NULL OR approved_by <> drafted_by),
-    CONSTRAINT ck_notice_order    CHECK (sent_at IS NULL OR approved_at IS NOT NULL)
+    CONSTRAINT ck_notice_order    CHECK (sent_at IS NULL OR approved_by IS NOT NULL),
+    CONSTRAINT ck_notice_approval CHECK ((approved_by IS NULL) = (approved_at IS NULL))   -- pass 3
 );
 
 -- ---------------------------------------------------------------------
@@ -316,35 +325,116 @@ CREATE TABLE audit_chain_head (
 );
 INSERT INTO audit_chain_head VALUES (1, NULL, REPEAT('0', 64));
 
+-- Pass 3. A session can switch strict mode off (SET sql_mode = ''). MySQL then
+-- stores an unknown ENUM value as '' with only a warning, so a harm could be
+-- filed under a category that does not exist. CHECK constraints are enforced
+-- whatever the sql_mode, so every ENUM column refuses ''.
+ALTER TABLE ai_system            ADD CONSTRAINT ck_ai_system_system_type_valid CHECK (system_type <> '');
+ALTER TABLE app_user             ADD CONSTRAINT ck_app_user_role_valid CHECK (role <> '');
+ALTER TABLE data_incident        ADD CONSTRAINT ck_data_incident_exfiltrated_valid CHECK (exfiltrated <> '');
+ALTER TABLE harm                 ADD CONSTRAINT ck_harm_category_valid CHECK (category <> '');
+ALTER TABLE harm                 ADD CONSTRAINT ck_harm_personal_data_valid CHECK (personal_data <> '');
+ALTER TABLE incident             ADD CONSTRAINT ck_incident_adversary_valid CHECK (adversary <> '');
+ALTER TABLE incident             ADD CONSTRAINT ck_incident_cyber_incident_valid CHECK (cyber_incident <> '');
+ALTER TABLE incident             ADD CONSTRAINT ck_incident_kind_valid CHECK (kind <> '');
+ALTER TABLE incident             ADD CONSTRAINT ck_incident_severity_valid CHECK (severity <> '');
+ALTER TABLE incident             ADD CONSTRAINT ck_incident_status_valid CHECK (status <> '');
+ALTER TABLE incident_mapping     ADD CONSTRAINT ck_incident_mapping_confidence_valid CHECK (confidence <> '');
+ALTER TABLE incident_mapping     ADD CONSTRAINT ck_incident_mapping_state_valid CHECK (state <> '');
+ALTER TABLE model_harm_incident  ADD CONSTRAINT ck_model_harm_incident_output_type_valid CHECK (output_type <> '');
+ALTER TABLE obligation_clock     ADD CONSTRAINT ck_obligation_clock_status_valid CHECK (status <> '');
+ALTER TABLE rule_version         ADD CONSTRAINT ck_rule_version_trigger_on_valid CHECK (trigger_on <> '');
+ALTER TABLE taxonomy_version     ADD CONSTRAINT ck_taxonomy_version_framework_valid CHECK (framework <> '');
+
 -- =====================================================================
 -- TRIGGERS: the database itself refuses anything that would rewrite history
 -- =====================================================================
 DELIMITER //
 
+-- Pass 3. Any connection may change its OWN session settings without a special
+-- privilege: SET timestamp moves NOW() and UTC_TIMESTAMP() (so "the database
+-- clock" could be faked), and foreign_key_checks, unique_checks or sql_mode can
+-- switch off checks. Every protective trigger calls this first and refuses to
+-- work for a session that has done any of that. SYSDATE() is the real time; it
+-- ignores SET timestamp.
+-- Closed means closed, for every table that hangs off an incident. FOR SHARE
+-- waits for a transaction that is closing the incident right now, so a harm
+-- cannot slip in at the same moment as the close.
+CREATE PROCEDURE assert_open(IN p_incident INT)
+BEGIN
+    DECLARE v_status VARCHAR(20);
+    SELECT status INTO v_status FROM incident WHERE incident_id = p_incident FOR SHARE;
+    IF v_status = 'CLOSED' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the incident is closed';
+    END IF;
+END//
+
+-- A reviewer whose account is still active. NOT EXISTS, not "(SELECT role) <> ...":
+-- for a missing user the comparison would be NULL, and an IF on NULL does nothing.
+CREATE PROCEDURE assert_reviewer(IN p_user INT, IN p_message VARCHAR(128))
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM app_user WHERE user_id = p_user AND role = 'REVIEWER' AND active) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = p_message;
+    END IF;
+END//
+
+CREATE PROCEDURE assert_honest_session()
+BEGIN
+    IF ABS(TIMESTAMPDIFF(SECOND, NOW(), SYSDATE())) > 5 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'refused: this session has changed its clock (SET timestamp)';
+    END IF;
+    IF @@session.foreign_key_checks = 0 OR @@session.unique_checks = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'refused: this session has switched off key checks';
+    END IF;
+    -- sql_mode cannot be checked here: a trigger always runs with the sql_mode
+    -- it was CREATED with, so it never sees the session's. Strict mode being
+    -- switched off is caught by the ck_*_valid CHECK constraints instead.
+END//
+
 -- aware_at can never be in the future (5 minutes of clock skew allowed).
 CREATE TRIGGER trg_incident_bi BEFORE INSERT ON incident
 FOR EACH ROW
 BEGIN
+    CALL assert_honest_session();
     IF NEW.aware_at > UTC_TIMESTAMP() + INTERVAL 5 MINUTE THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'aware_at cannot be in the future';
     END IF;
     IF NEW.status <> 'REPORTED' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a new incident must start in REPORTED';
     END IF;
+    SET NEW.created_at = UTC_TIMESTAMP();                  -- the app cannot backdate a record
+    SET NEW.ref_code = NULL;                               -- assigned once the id exists, in a fixed format
 END//
 
 -- Write-once fields + legal workflow transitions.
 CREATE TRIGGER trg_incident_bu BEFORE UPDATE ON incident
 FOR EACH ROW
 BEGIN
+    DECLARE v_actor   INT;
+    DECLARE v_action  VARCHAR(40);
+    DECLARE v_details VARCHAR(500);
+    DECLARE v_when    DATETIME(3);
+    CALL assert_honest_session();
     IF NOT (NEW.aware_at <=> OLD.aware_at) OR NOT (NEW.occurred_at <=> OLD.occurred_at)
        OR NOT (NEW.detected_at <=> OLD.detected_at) OR NOT (NEW.reported_by <=> OLD.reported_by)
        OR NOT (NEW.kind <=> OLD.kind) OR NOT (NEW.created_at <=> OLD.created_at)
-       OR NOT (NEW.aware_gap_reason <=> OLD.aware_gap_reason) OR NOT (NEW.linked_to <=> OLD.linked_to) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'timestamps, reporter and kind are write-once; record an amendment instead';
+       OR NOT (NEW.aware_gap_reason COLLATE utf8mb4_bin <=> OLD.aware_gap_reason COLLATE utf8mb4_bin)
+       OR NOT (NEW.linked_to <=> OLD.linked_to) OR NOT (NEW.ai_system_id <=> OLD.ai_system_id) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'timestamps, reporter, system and kind are write-once; record an amendment instead';
     END IF;
-    IF OLD.ref_code IS NOT NULL AND NOT (NEW.ref_code <=> OLD.ref_code) THEN
+    -- COLLATE utf8mb4_bin: the table's collation is case- and accent-insensitive,
+    -- so a plain comparison would let 'PTV-…' become 'ptv-…' unnoticed
+    IF OLD.ref_code IS NOT NULL AND NOT (NEW.ref_code COLLATE utf8mb4_bin <=> OLD.ref_code COLLATE utf8mb4_bin) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ref_code is write-once';
+    END IF;
+    -- Pass 3: the code is PTV-<year of awareness in IST>-<id>, never chosen freely
+    IF OLD.ref_code IS NULL AND NEW.ref_code IS NOT NULL
+       AND NEW.ref_code COLLATE utf8mb4_bin <> CONCAT('PTV-', YEAR(OLD.aware_at + INTERVAL 330 MINUTE), '-',
+                                IF(OLD.incident_id < 10000, LPAD(OLD.incident_id, 4, '0'), OLD.incident_id)) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ref_code must be PTV-<year aware, IST>-<id>';
+    END IF;
+    IF NOT (NEW.late_report_reason COLLATE utf8mb4_bin <=> OLD.late_report_reason COLLATE utf8mb4_bin) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'timestamps, reporter, system and kind are write-once; record an amendment instead';
     END IF;
     IF OLD.status = 'CLOSED' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a closed incident cannot change; open a linked incident instead';
@@ -356,6 +446,62 @@ BEGIN
         OR (OLD.status = 'NOTICES_REVIEWED' AND NEW.status IN ('CLOSED','TRIAGED'))
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'illegal status transition';
+    END IF;
+    -- Pass 3: the database cannot see who is logged in, so a status change must
+    -- be announced first. The newest audit event for this incident must say
+    -- "OLD -> NEW", from a reviewer, in the last minute; closing needs someone
+    -- other than the reporter. A lie would be sitting in the hash-chained trail.
+    IF NEW.status <> OLD.status THEN
+        SELECT e.actor_id, e.action, e.details, e.created_at INTO v_actor, v_action, v_details, v_when
+          FROM audit_event e WHERE e.incident_id = OLD.incident_id ORDER BY e.event_id DESC LIMIT 1;
+        IF NOT (v_action <=> 'STATUS_CHANGED')
+           OR v_details NOT LIKE CONCAT(OLD.status, ' -> ', NEW.status, '%')
+           OR v_when < UTC_TIMESTAMP(3) - INTERVAL 1 MINUTE THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a status change must be recorded in the audit trail first';
+        END IF;
+        CALL assert_reviewer(v_actor, 'only a reviewer can move an incident');
+        IF NEW.status = 'CLOSED' AND v_actor = OLD.reported_by THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the reporter of an incident cannot close it';
+        END IF;
+        -- Pass 3: the same conditions IncidentWorkflow.blockers() checks in Java.
+        IF NEW.status = 'ASSESSED' THEN
+            IF NOT EXISTS (SELECT 1 FROM harm WHERE incident_id = OLD.incident_id) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ASSESSED needs at least one harm';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM evidence WHERE incident_id = OLD.incident_id) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ASSESSED needs at least one piece of evidence';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM incident_mapping WHERE incident_id = OLD.incident_id AND state = 'CONFIRMED') THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ASSESSED needs at least one confirmed mapping';
+            END IF;
+            IF OLD.cyber_incident = 'UNSURE' OR EXISTS (SELECT 1 FROM harm WHERE incident_id = OLD.incident_id AND personal_data = 'UNSURE') THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ASSESSED needs the CERT-In and personal-data questions answered';
+            END IF;
+        END IF;
+        IF NEW.status = 'NOTICES_REVIEWED' AND EXISTS (
+             SELECT 1 FROM obligation_clock k WHERE k.incident_id = OLD.incident_id AND k.status = 'RUNNING'
+                AND NOT EXISTS (SELECT 1 FROM notification n WHERE n.clock_id = k.clock_id AND n.approved_by IS NOT NULL)) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'every running clock needs an approved notice first';
+        END IF;
+        IF NEW.status = 'CLOSED' THEN
+            IF EXISTS (SELECT 1 FROM obligation_clock WHERE incident_id = OLD.incident_id AND status = 'RUNNING') THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'cannot close while a clock is still running';
+            END IF;
+            IF EXISTS (SELECT 1 FROM incident_mapping WHERE incident_id = OLD.incident_id AND state = 'SUGGESTED') THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'cannot close with mapping suggestions not reviewed';
+            END IF;
+        END IF;
+        -- Every duty that applies must have its clock before the incident moves on.
+        IF NEW.status IN ('ASSESSED', 'NOTICES_REVIEWED', 'CLOSED') AND EXISTS (
+             SELECT 1 FROM rule_version r
+              WHERE r.effective_from <= OLD.aware_at
+                AND ((r.trigger_on = 'CYBER_INCIDENT' AND OLD.cyber_incident <> 'NO')
+                  OR (r.trigger_on = 'PERSONAL_DATA' AND (
+                          EXISTS (SELECT 1 FROM harm h WHERE h.incident_id = OLD.incident_id AND h.personal_data <> 'NO')
+                       OR (OLD.kind = 'DATA' AND NOT EXISTS (SELECT 1 FROM harm h WHERE h.incident_id = OLD.incident_id)))))
+                AND NOT EXISTS (SELECT 1 FROM obligation_clock k WHERE k.incident_id = OLD.incident_id AND k.rule_id = r.rule_id)) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a legal duty applies but its clock was never started';
+        END IF;
     END IF;
 END//
 
@@ -381,22 +527,48 @@ BEGIN
             AND a.amended_at >= UTC_TIMESTAMP() - INTERVAL 1 MINUTE) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'changing the CERT-In answer needs an amendment with a reason';
     END IF;
+    -- Pass 3: what happened (title, description) and whether an attacker was
+    -- involved also need an amendment. Compared byte for byte (utf8mb4_bin),
+    -- because the default collation would treat 'Résumé' and 'resume' as equal.
+    IF NOT (NEW.title COLLATE utf8mb4_bin <=> OLD.title COLLATE utf8mb4_bin) AND NOT EXISTS (
+         SELECT 1 FROM incident_amendment a
+          WHERE a.incident_id = OLD.incident_id AND a.field_name = 'title'
+            AND a.old_value COLLATE utf8mb4_bin = OLD.title COLLATE utf8mb4_bin
+            AND a.new_value COLLATE utf8mb4_bin = NEW.title COLLATE utf8mb4_bin
+            AND a.amended_at >= UTC_TIMESTAMP() - INTERVAL 1 MINUTE) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'changing the title needs an amendment with a reason';
+    END IF;
+    IF NOT (NEW.description COLLATE utf8mb4_bin <=> OLD.description COLLATE utf8mb4_bin) AND NOT EXISTS (
+         SELECT 1 FROM incident_amendment a
+          WHERE a.incident_id = OLD.incident_id AND a.field_name = 'description'
+            AND a.old_value COLLATE utf8mb4_bin = OLD.description COLLATE utf8mb4_bin
+            AND a.new_value COLLATE utf8mb4_bin = NEW.description COLLATE utf8mb4_bin
+            AND a.amended_at >= UTC_TIMESTAMP() - INTERVAL 1 MINUTE) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'changing the description needs an amendment with a reason';
+    END IF;
+    IF NEW.adversary <> OLD.adversary AND NOT EXISTS (
+         SELECT 1 FROM incident_amendment a
+          WHERE a.incident_id = OLD.incident_id AND a.field_name = 'adversary'
+            AND a.old_value = OLD.adversary AND a.new_value = NEW.adversary
+            AND a.amended_at >= UTC_TIMESTAMP() - INTERVAL 1 MINUTE) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'changing the adversary answer needs an amendment with a reason';
+    END IF;
 END//
 
 -- Nothing can be added to a closed incident.
 CREATE TRIGGER trg_harm_bi BEFORE INSERT ON harm
 FOR EACH ROW
 BEGIN
-    IF (SELECT status FROM incident WHERE incident_id = NEW.incident_id) = 'CLOSED' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the incident is closed';
-    END IF;
+    CALL assert_honest_session();
+    CALL assert_open(NEW.incident_id);
+    SET NEW.recorded_at = UTC_TIMESTAMP();
 END//
 CREATE TRIGGER trg_evidence_bi BEFORE INSERT ON evidence
 FOR EACH ROW
 BEGIN
-    IF (SELECT status FROM incident WHERE incident_id = NEW.incident_id) = 'CLOSED' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the incident is closed';
-    END IF;
+    CALL assert_honest_session();
+    CALL assert_open(NEW.incident_id);
+    SET NEW.added_at = UTC_TIMESTAMP();
 END//
 
 -- A clock is anchored to aware_at forever, and the DATABASE checks the
@@ -407,6 +579,8 @@ BEGIN
     DECLARE v_aware DATETIME;
     DECLARE v_from  DATETIME;
     DECLARE v_win   INT;
+    CALL assert_honest_session();
+    CALL assert_open(NEW.incident_id);
     SELECT aware_at INTO v_aware FROM incident WHERE incident_id = NEW.incident_id;
     SELECT effective_from, window_minutes INTO v_from, v_win FROM rule_version WHERE rule_id = NEW.rule_id;
     IF NEW.started_at <> v_aware THEN
@@ -421,6 +595,7 @@ BEGIN
     IF NEW.status <> 'RUNNING' OR NEW.met_at IS NOT NULL OR NEW.ruled_out_by IS NOT NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a new clock must be RUNNING';
     END IF;
+    SET NEW.created_at = UTC_TIMESTAMP();
 END//
 
 CREATE TRIGGER trg_clock_bu BEFORE UPDATE ON obligation_clock
@@ -428,6 +603,7 @@ FOR EACH ROW
 BEGIN
     DECLARE v_reporter INT;
     DECLARE v_sent DATETIME;
+    CALL assert_honest_session();
     IF NEW.started_at <> OLD.started_at OR NEW.due_at <> OLD.due_at
        OR NEW.rule_id <> OLD.rule_id OR NEW.incident_id <> OLD.incident_id THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a clock cannot be moved or reset';
@@ -435,11 +611,12 @@ BEGIN
     IF OLD.status <> 'RUNNING' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a clock that is MET or RULED_OUT is final';
     END IF;
+    CALL assert_open(OLD.incident_id);
     IF NEW.status = 'MET' THEN
         -- A clock is met only by a notice that was actually sent. met_at is
         -- copied from that notice, so nobody can type in a convenient time.
         SELECT MIN(sent_at) INTO v_sent FROM notification
-         WHERE clock_id = OLD.clock_id AND sent_at IS NOT NULL;
+         WHERE clock_id = OLD.clock_id AND sent_at IS NOT NULL AND approved_by IS NOT NULL;
         IF v_sent IS NULL THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a clock is met only by a sent notice';
         END IF;
@@ -450,11 +627,18 @@ BEGIN
         IF NEW.ruled_out_by = v_reporter THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the reporter of an incident cannot rule out its clocks';
         END IF;
-        IF (SELECT role FROM app_user WHERE user_id = NEW.ruled_out_by) <> 'REVIEWER' THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'only a reviewer can rule out a clock';
-        END IF;
+        CALL assert_reviewer(NEW.ruled_out_by, 'only a reviewer can rule out a clock');
         IF CHAR_LENGTH(TRIM(NEW.ruled_out_reason)) < 20 THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ruling out a clock needs a written reason (20+ characters)';
+        END IF;
+        -- Pass 3: a missed deadline cannot be tidied away afterwards. Once the
+        -- (extended) due time has passed, or a notice has gone out, the clock can
+        -- only be met (late, and the view says MET_LATE) or stay OVERDUE.
+        IF UTC_TIMESTAMP() > COALESCE((SELECT MAX(e.new_due_at) FROM clock_extension e WHERE e.clock_id = OLD.clock_id), OLD.due_at) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'an overdue clock cannot be ruled out afterwards; send the notice late instead';
+        END IF;
+        IF EXISTS (SELECT 1 FROM notification WHERE clock_id = OLD.clock_id AND sent_at IS NOT NULL) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a notice was already sent for this clock; it cannot be ruled out';
         END IF;
         SET NEW.ruled_out_at = UTC_TIMESTAMP();
     END IF;
@@ -471,6 +655,7 @@ BEGIN
     DECLARE v_status VARCHAR(10);
     DECLARE v_due DATETIME;
     DECLARE v_ext BOOLEAN;
+    CALL assert_honest_session();
     SELECT c.status, r.extendable,
            COALESCE((SELECT MAX(e.new_due_at) FROM clock_extension e WHERE e.clock_id = c.clock_id), c.due_at)
       INTO v_status, v_ext, v_due
@@ -478,6 +663,11 @@ BEGIN
      WHERE c.clock_id = NEW.clock_id;
     IF NOT v_ext THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'this rule does not allow extensions';
+    END IF;
+    CALL assert_open((SELECT incident_id FROM obligation_clock WHERE clock_id = NEW.clock_id));
+    IF NEW.recorded_by = (SELECT i.reported_by FROM obligation_clock c JOIN incident i ON i.incident_id = c.incident_id
+                           WHERE c.clock_id = NEW.clock_id) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the reporter of an incident cannot record an extension for it';
     END IF;
     IF v_status <> 'RUNNING' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'that clock is already met or ruled out';
@@ -488,9 +678,7 @@ BEGIN
     IF NEW.new_due_at <= v_due THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'an extension must be later than the current due time';
     END IF;
-    IF (SELECT role FROM app_user WHERE user_id = NEW.recorded_by) <> 'REVIEWER' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'only a reviewer can record an extension';
-    END IF;
+    CALL assert_reviewer(NEW.recorded_by, 'only a reviewer can record an extension');
     SET NEW.recorded_at = UTC_TIMESTAMP();
 END//
 CREATE TRIGGER trg_ext_bu BEFORE UPDATE ON clock_extension
@@ -500,7 +688,11 @@ FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'extensions are append-o
 
 -- Sign-in history cannot be rewritten or backdated (that would undo a lockout).
 CREATE TRIGGER trg_login_bi BEFORE INSERT ON login_attempt
-FOR EACH ROW SET NEW.at = UTC_TIMESTAMP(3)//
+FOR EACH ROW
+BEGIN
+    CALL assert_honest_session();
+    SET NEW.at = UTC_TIMESTAMP(3);
+END//
 CREATE TRIGGER trg_login_bu BEFORE UPDATE ON login_attempt
 FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'login history is append-only'//
 CREATE TRIGGER trg_login_bd BEFORE DELETE ON login_attempt
@@ -510,31 +702,50 @@ FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'login history is append
 CREATE TRIGGER trg_notice_bi BEFORE INSERT ON notification
 FOR EACH ROW
 BEGIN
+    CALL assert_honest_session();
     IF NEW.approved_by IS NOT NULL OR NEW.approved_at IS NOT NULL OR NEW.sent_at IS NOT NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a new notice must be a draft';
     END IF;
     IF (SELECT status FROM obligation_clock WHERE clock_id = NEW.clock_id) <> 'RUNNING' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'that clock is already met or ruled out';
     END IF;
+    CALL assert_open((SELECT incident_id FROM obligation_clock WHERE clock_id = NEW.clock_id));
+    SET NEW.drafted_at = UTC_TIMESTAMP();
 END//
 
 -- Approval and sending: four eyes, server time, in order, once.
 CREATE TRIGGER trg_notice_bu BEFORE UPDATE ON notification
 FOR EACH ROW
 BEGIN
-    IF NEW.body <> OLD.body AND OLD.approved_by IS NOT NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'an approved notice cannot be edited';
+    CALL assert_honest_session();
+    -- Pass 3: what a notice says, who wrote it and which clock it answers are
+    -- write-once, even for a draft. Otherwise a reviewer could rewrite someone
+    -- else's draft (or hand their own draft to a colleague's name) and then
+    -- approve it, and the four-eyes CHECK would never notice. To change a
+    -- draft, write a new one.
+    IF NOT (NEW.body COLLATE utf8mb4_bin <=> OLD.body COLLATE utf8mb4_bin)
+       OR NOT (NEW.recipient COLLATE utf8mb4_bin <=> OLD.recipient COLLATE utf8mb4_bin)
+       OR NOT (NEW.drafted_by <=> OLD.drafted_by) OR NOT (NEW.clock_id <=> OLD.clock_id)
+       OR NOT (NEW.drafted_at <=> OLD.drafted_at) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a notice is write-once; draft a new one instead';
     END IF;
     IF OLD.approved_by IS NOT NULL AND NOT (NEW.approved_by <=> OLD.approved_by) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'approval is final';
     END IF;
+    -- Pass 3: the approval time is the database's, set once, below
+    IF NOT (NEW.approved_at <=> OLD.approved_at) AND NOT (OLD.approved_by IS NULL AND NEW.approved_by IS NOT NULL) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'approved_at is set by the database when a reviewer approves';
+    END IF;
+    CALL assert_open((SELECT incident_id FROM obligation_clock WHERE clock_id = OLD.clock_id));
     IF OLD.sent_at IS NOT NULL AND NOT (NEW.sent_at <=> OLD.sent_at) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a sent notice is final';
     END IF;
+    IF ((OLD.approved_by IS NULL AND NEW.approved_by IS NOT NULL) OR (OLD.sent_at IS NULL AND NEW.sent_at IS NOT NULL))
+       AND (SELECT status FROM obligation_clock WHERE clock_id = OLD.clock_id) = 'RULED_OUT' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'that clock was ruled out; its notice cannot be approved or sent';
+    END IF;
     IF OLD.approved_by IS NULL AND NEW.approved_by IS NOT NULL THEN
-        IF (SELECT role FROM app_user WHERE user_id = NEW.approved_by) <> 'REVIEWER' THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'only a reviewer can approve a notice';
-        END IF;
+        CALL assert_reviewer(NEW.approved_by, 'only a reviewer can approve a notice');
         SET NEW.approved_at = UTC_TIMESTAMP();
     END IF;
     IF OLD.sent_at IS NULL AND NEW.sent_at IS NOT NULL THEN
@@ -551,6 +762,7 @@ CREATE TRIGGER trg_audit_bi BEFORE INSERT ON audit_event
 FOR EACH ROW
 BEGIN
     DECLARE v_head CHAR(64);
+    CALL assert_honest_session();
     SELECT last_hash INTO v_head FROM audit_chain_head WHERE id = 1 FOR UPDATE;
     IF NEW.prev_hash <> v_head THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'audit event does not extend the chain head';
@@ -567,6 +779,56 @@ END//
 CREATE TRIGGER trg_audit_ai AFTER INSERT ON audit_event
 FOR EACH ROW
     UPDATE audit_chain_head SET last_event_id = NEW.event_id, last_hash = NEW.hash WHERE id = 1//
+
+-- Pass 3: the head may only ever point at the newest event. Without this the
+-- app account (which may lock the head row, so it holds UPDATE) could wind the
+-- head back to an old event and then append a branch from there.
+CREATE TRIGGER trg_head_bu BEFORE UPDATE ON audit_chain_head
+FOR EACH ROW
+BEGIN
+    IF NEW.id <> 1
+       OR NOT (NEW.last_event_id <=> (SELECT MAX(event_id) FROM audit_event))
+       OR NOT (NEW.last_hash <=> (SELECT hash FROM audit_event WHERE event_id = NEW.last_event_id)) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the chain head can only point at the newest audit event';
+    END IF;
+END//
+
+-- Pass 3: an amendment is stamped by the database. A future-dated amendment
+-- would otherwise "pre-approve" a silent change months later.
+CREATE TRIGGER trg_amend_bi BEFORE INSERT ON incident_amendment
+FOR EACH ROW
+BEGIN
+    CALL assert_honest_session();
+    CALL assert_open(NEW.incident_id);
+    SET NEW.amended_at = UTC_TIMESTAMP();
+END//
+
+-- Pass 3: tables with no rule of their own still refuse a dishonest session
+-- (otherwise SET foreign_key_checks = 0 could attach rows to nothing).
+CREATE TRIGGER trg_org_bi    BEFORE INSERT ON organization        FOR EACH ROW CALL assert_honest_session()//
+CREATE TRIGGER trg_system_bi BEFORE INSERT ON ai_system           FOR EACH ROW CALL assert_honest_session()//
+CREATE TRIGGER trg_tag_bi BEFORE INSERT ON incident_tag
+FOR EACH ROW
+BEGIN
+    CALL assert_honest_session();
+    CALL assert_open(NEW.incident_id);
+END//
+
+-- Pass 3: the details row is written in the same transaction as the incident,
+-- before it gets its reference code, and must match the incident's kind.
+-- No second details row later, and no AGENT details on a DATA incident.
+CREATE PROCEDURE assert_new_subtype(IN p_incident INT, IN p_kind VARCHAR(20))
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM incident WHERE incident_id = p_incident AND kind = p_kind AND ref_code IS NULL) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'details can only be added to a new incident of the same kind';
+    END IF;
+END//
+CREATE TRIGGER trg_agent_bi BEFORE INSERT ON agent_incident
+FOR EACH ROW BEGIN CALL assert_honest_session(); CALL assert_new_subtype(NEW.incident_id, 'AGENT'); END//
+CREATE TRIGGER trg_model_bi BEFORE INSERT ON model_harm_incident
+FOR EACH ROW BEGIN CALL assert_honest_session(); CALL assert_new_subtype(NEW.incident_id, 'MODEL_HARM'); END//
+CREATE TRIGGER trg_data_bi BEFORE INSERT ON data_incident
+FOR EACH ROW BEGIN CALL assert_honest_session(); CALL assert_new_subtype(NEW.incident_id, 'DATA'); END//
 
 -- Append-only tables.
 CREATE TRIGGER trg_audit_bu BEFORE UPDATE ON audit_event
@@ -586,23 +848,30 @@ FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'amendments are append-o
 CREATE TRIGGER trg_mapping_bi BEFORE INSERT ON incident_mapping
 FOR EACH ROW
 BEGIN
+    CALL assert_honest_session();
     IF NEW.state <> 'SUGGESTED' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a new mapping must be SUGGESTED';
     END IF;
-    IF (SELECT status FROM incident WHERE incident_id = NEW.incident_id) = 'CLOSED' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the incident is closed';
-    END IF;
+    CALL assert_open(NEW.incident_id);
 END//
 CREATE TRIGGER trg_mapping_bu BEFORE UPDATE ON incident_mapping
 FOR EACH ROW
 BEGIN
+    CALL assert_honest_session();
     IF OLD.state <> 'SUGGESTED' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a reviewed mapping is final';
     END IF;
+    -- Pass 3: a reviewer confirms what was suggested, so the suggestion itself
+    -- cannot be swapped underneath them.
+    IF NOT (NEW.node_id <=> OLD.node_id) OR NOT (NEW.incident_id <=> OLD.incident_id)
+       OR NOT (NEW.mapped_by <=> OLD.mapped_by)
+       OR NOT (NEW.rationale COLLATE utf8mb4_bin <=> OLD.rationale COLLATE utf8mb4_bin)
+       OR NOT (NEW.confidence <=> OLD.confidence) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a suggestion is write-once; only its review can be recorded';
+    END IF;
+    CALL assert_open(OLD.incident_id);
     IF NEW.state <> 'SUGGESTED' THEN
-        IF (SELECT role FROM app_user WHERE user_id = NEW.reviewed_by) <> 'REVIEWER' THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'only a reviewer can confirm or reject a mapping';
-        END IF;
+        CALL assert_reviewer(NEW.reviewed_by, 'only a reviewer can confirm or reject a mapping');
         SET NEW.reviewed_at = UTC_TIMESTAMP();
     END IF;
 END//
