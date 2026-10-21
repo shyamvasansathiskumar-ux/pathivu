@@ -7,7 +7,7 @@
 <meta name="description" content="Pathivu (பதிவு, Tamil for record) is a Java and MySQL incident register for AI failures. It maps each incident to OWASP, MITRE ATLAS and NIST, and runs India's reporting deadlines from the moment the organisation became aware. Try the rule engine live in your browser.">
 <meta name="theme-color" content="#e8e1d3">
 <meta property="og:title" content="Pathivu · the AI incident register that watches the legal clock">
-<meta property="og:description" content="When an AI system breaks something, a legal clock may already be running. Java, MySQL, 36 triggers, 106 tests. By Shyam Kumar.">
+<meta property="og:description" content="When an AI system breaks something, a legal clock may already be running. Java, MySQL, 36 triggers, 110 tests. By Shyam Kumar.">
 <meta property="og:image" content="https://shyamvasansathiskumar-ux.github.io/pathivu/og.jpg">
 <meta property="og:url" content="https://shyamvasansathiskumar-ux.github.io/pathivu/">
 <meta property="og:type" content="website">
@@ -67,7 +67,7 @@
       </div>
     </div>
     <div class="wrap hero-meta" data-intro>
-      <span class="label bare">106 tests</span><span class="label bare">36 triggers</span><span class="label bare">≈3,700 lines of Java</span><span class="label bare scroll-cue">Scroll</span>
+      <span class="label bare">110 tests</span><span class="label bare">36 triggers</span><span class="label bare">≈3,700 lines of Java</span><span class="label bare scroll-cue">Scroll</span>
     </div>
   </section>
 
@@ -261,7 +261,7 @@
         <p class="label" data-scramble>07 · Proof</p>
         <div class="tally"><b id="passed">–</b><span id="tallytext">cases checked in this browser</span></div>
         <p class="body" data-rise>The Java engine generated <span id="caseCount">240</span> random incidents, from 2022 to 2027, and wrote down its answers: which clocks start and when they fall due, which mappings it suggests, and what blocks the next workflow step. The JavaScript on this page has just answered the same cases. They have to match exactly.</p>
-        <p class="body" data-rise>The Java project itself runs <b>106 tests</b>: 23 on the logic, 20 on the services against MySQL, and 63 attacks on the database.</p>
+        <p class="body" data-rise>The Java project itself runs <b>110 tests</b>: 23 on the logic, 22 on the services against MySQL, and 65 attacks on the database.</p>
       </div>
       <div class="col-r">
         <div class="vectors card" data-rise>
@@ -296,16 +296,16 @@
 <pre class="term" data-rise><span class="dim">$</span> mysql -u root -p &lt; db/schema.sql   <span class="dim"># 21 tables, 36 triggers, 2 views</span>
 <span class="dim">$</span> mysql -u root -p &lt; db/seed.sql
 <span class="dim">$</span> mysql -u root -p &lt; db/grants.sql   <span class="dim"># the app gets no DELETE, ever</span>
-<span class="dim">$</span> scripts/build.sh
+<span class="dim">$</span> bash scripts/build.sh
 <span class="dim">$</span> java -cp "out:lib/*" pathivu.tools.Setup
 <span class="dim">$</span> java -cp "out:lib/*" pathivu.tools.DemoSeeder
-<span class="dim">$</span> scripts/test.sh
+<span class="dim">$</span> bash scripts/test.sh
   PASS  cannot change aware_at
   PASS  cannot start a DPDP clock before Rule 7 is in force
   PASS  a full re-hashed rewrite by root fools verify() but not a saved anchor
   PASS  a session with a faked clock cannot send a notice or sign in
-  <span class="ok">106 passed, 0 failed</span>
-<span class="dim">$</span> scripts/run.sh                      <span class="dim"># sign in as arjun</span></pre>
+  <span class="ok">110 passed, 0 failed</span>
+<span class="dim">$</span> bash scripts/run.sh                 <span class="dim"># sign in as arjun</span></pre>
       </div>
     </div>
   </section>
