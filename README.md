@@ -11,7 +11,9 @@ When an AI system causes harm (an agent deletes a database, a chatbot leaks phon
 3. **runs India's reporting clocks** from the moment the organisation became aware: CERT-In 6 hours today, and DPDP Rule 7 once it is in force on 13 May 2027,
 4. **keeps a tamper-evident audit trail** that MySQL itself checks, plus anchors that catch even a full rewrite by root.
 
-The important rules are enforced twice: in Java, so the user gets a clear message, and in MySQL (constraints, 28 triggers, a restricted account), so a bug, a SQL injection or a manual SQL session still cannot break them.
+The important rules are enforced twice: in Java, so the user gets a clear message, and in MySQL (constraints, 36 triggers, a restricted account), so a bug, a SQL injection or a manual SQL session still cannot break them. The database also refuses a session that has quietly changed its own clock (`SET timestamp`) or switched off its own checks.
+
+**New to all this?** Read [Pathivu in plain words](https://shyamvasansathiskumar-ux.github.io/pathivu/learn.html), a ten-minute guide that assumes no background in security, law or databases.
 
 ## What you need
 
@@ -56,7 +58,7 @@ Demo logins (password `Pathivu@2026`):
 | kavya | REVIEWER | second reviewer, for four-eyes approval |
 | ravi  | AUDITOR  | read everything, verify the audit chain, check anchors |
 
-Five wrong passwords in 15 minutes lock a username for 15 minutes.
+Five wrong passwords in 15 minutes lock a username for 15 minutes (signing in correctly afterwards does not reset the count).
 
 ## Test
 
@@ -64,7 +66,7 @@ Five wrong passwords in 15 minutes lock a username for 15 minutes.
 scripts/test.sh
 ```
 
-Resets the database and runs **66 tests**: 19 on pure logic, 16 on services against MySQL, and 31 attacks where the app's own database account tries to break the rules with raw SQL (plus root tampering with the audit trail). Every attack must be refused by MySQL itself.
+Resets the database and runs **106 tests**: 23 on pure logic, 20 on services against MySQL, and 63 attacks where the app's own database account tries to break the rules with raw SQL (plus root tampering with the audit trail). Every attack must be refused by MySQL itself.
 
 ## Windows
 
@@ -90,7 +92,7 @@ Easiest is IntelliJ: open the folder, mark `src` and `test` as source roots, add
 ## Project layout
 
 ```
-db/        schema.sql (21 tables, CHECKs, 28 triggers, 2 views), seed.sql, grants.sql
+db/        schema.sql (21 tables, CHECKs, 36 triggers, 4 guard procedures, 2 views), seed.sql, grants.sql
 src/pathivu/
   model/     Incident (abstract) + 3 subclasses, records for everything else
   rules/     ObligationRule (abstract) + CyberIncidentRule, PersonalDataRule, RuleEngine
@@ -110,11 +112,12 @@ notes/     ANALYSIS.md, MASTER-PROMPT.md, a sample report
 
 `docs/` is the project site. `docs/pathivu-core.js` is a line-by-line port of `rules/`, `mapping/` and `workflow/`. `docs/vectors.json` is produced by the Java code (`pathivu.tools.ExportVectors`), and the page checks that the port gives the same answer on all 240 cases. `docs/refusals.jsonl` is the real output of the attack tests (`-Dpathivu.log=`), and `docs/audit-sample.json` is the real audit chain of the demo database. Shared styles and libraries (`base.css`, `motion.js`, `world.js`, GSAP, Three.js, Lenis, fonts) come from the design system used across my project sites.
 
-Regenerate the data after changing the engine:
+`docs/learn.html` is the plain-words guide, for readers with no technical background.
+
+Regenerate the data after changing the engine or the schema:
 
 ```bash
-java -cp "out:lib/*" pathivu.tools.ExportVectors docs/vectors.json
-scripts/reset-db.sh && rm -f docs/refusals.jsonl && java -Dpathivu.log=docs/refusals.jsonl -cp "out:lib/*" pathivu.TestRunner
+scripts/export-site-data.sh     # vectors.json, refusals.jsonl, audit-sample.json
 ```
 
 ## Credits
