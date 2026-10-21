@@ -22,6 +22,9 @@ public class AuthService {
     public java.util.List<AppUser> all() { return db.read(users::listAll); }
 
     public static final int MAX_FAILURES = 5;
+    private static final String DUMMY_SALT = pathivu.security.Hex.of(PasswordHasher.newSalt());
+    private static final String DUMMY_HASH = PasswordHasher.hash("not-a-real-password".toCharArray(),
+                                                                 pathivu.security.Hex.parse(DUMMY_SALT));
     public static final int LOCK_MINUTES = 15;
     private final pathivu.dao.LoginDao logins = new pathivu.dao.LoginDao();
 
@@ -38,7 +41,13 @@ public class AuthService {
                 throw new AccessDenied("Too many failed attempts. This account is locked for " + LOCK_MINUTES + " minutes.");
             }
             UserDao.Credentials cr = db.read(c -> users.findCredentials(c, name));
-            if (cr == null || !cr.active() || !PasswordHasher.verify(password, cr.salt(), cr.hash())) {
+            // Pass 3: always do the slow PBKDF2 work, even for a username that does not
+            // exist. Otherwise "no such user" answers in 1 ms and "wrong password" in
+            // about 300 ms, and the stopwatch tells an attacker which usernames are real.
+            boolean ok;
+            if (cr == null) { PasswordHasher.verify(password, DUMMY_SALT, DUMMY_HASH); ok = false; }
+            else ok = PasswordHasher.verify(password, cr.salt(), cr.hash()) && cr.active();
+            if (!ok) {
                 db.tx(c -> { logins.record(c, name, false); return null; });
                 throw new AccessDenied("Username or password is wrong.");
             }

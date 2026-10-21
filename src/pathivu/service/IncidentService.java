@@ -124,6 +124,7 @@ public class IncidentService {
                 case "description" -> i.getDescription();
                 case "severity" -> i.getSeverity().name();
                 case "cyber_incident" -> i.getCyberIncident().name();
+                case "adversary" -> i.getAdversary().name();
                 case "occurred_at", "detected_at", "aware_at" -> null;   // annotation only
                 default -> throw new IllegalArgumentException("Unknown field " + field);
             };
@@ -180,9 +181,11 @@ public class IncidentService {
             if (back && (reason == null || reason.trim().length() < 10))
                 throw new IllegalArgumentException("Sending an incident back needs a reason of at least 10 characters");
             IncidentWorkflow.move(i, to, by, facts(c, incidentId));
-            incidents.updateStatus(c, incidentId, to);
+            // the audit event comes FIRST: the database trigger only accepts a status
+            // change that the newest audit event announces (who, from, to)
             audit.append(c, incidentId, by.id(), "STATUS_CHANGED",
                 from + " -> " + to + (reason == null || reason.isBlank() ? "" : " because " + reason.trim()));
+            incidents.updateStatus(c, incidentId, to);
             return null;
         });
     }

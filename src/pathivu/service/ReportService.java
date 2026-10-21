@@ -26,6 +26,7 @@ public class ReportService {
          .append("\nDetected  ").append(Times.ist(i.getDetectedAt()))
          .append("\nAware     ").append(Times.ist(i.getAwareAt())).append("   (all legal clocks start here)\n");
         if (i.getAwareGapReason() != null) b.append("  Why aware came later than detection: ").append(i.getAwareGapReason()).append("\n");
+        if (i.getLateReportReason() != null) b.append("  Why it was reported late: ").append(i.getLateReportReason()).append("\n");
         if (i.getLinkedTo() != null) b.append("  Follows up incident #").append(i.getLinkedTo()).append("\n");
         f.amendments().stream().filter(a -> a.field().endsWith("_at")).forEach(a ->
             b.append("  Note: ").append(a.field()).append(" correction recorded: ").append(a.newValue())

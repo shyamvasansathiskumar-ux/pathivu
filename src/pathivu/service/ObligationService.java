@@ -30,6 +30,9 @@ public class ObligationService {
             throw new IllegalArgumentException("Write why this duty does not apply (at least 20 characters).");
         db.tx(c -> {
             ObligationClock k = clocks.find(c, clockId);
+            if (java.time.Instant.now().isAfter(k.effectiveDue()))   // the trigger repeats this with the DB clock
+                throw new IllegalArgumentException("This deadline has already passed. It cannot be ruled out afterwards; "
+                    + "send the notice late instead (it will show as MET_LATE).");
             clocks.ruleOut(c, clockId, by.id(), reason.trim());
             audit.append(c, k.incidentId(), by.id(), "CLOCK_RULED_OUT", k.rule().code() + ": " + reason.trim());
             return null;
