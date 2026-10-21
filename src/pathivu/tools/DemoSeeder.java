@@ -63,7 +63,7 @@ public class DemoSeeder {
         ModelHarmIncident m = new ModelHarmIncident(
             "Triage model ranked samples from rural clinics lower",
             "Weekly review found that samples sent from rural partner clinics were scored as less urgent than identical urban samples.",
-            3, meera.id(), ago(now, 60 * 24 * 5), ago(now, 60 * 24 * 3 + 90), ago(now, 60 * 24 * 3), Severity.MEDIUM, Adversary.NONE,
+            3, meera.id(), ago(now, 60 * 8), ago(now, 60 * 4 + 90), ago(now, 60 * 4), Severity.MEDIUM, Adversary.NONE,
             OutputType.BIASED_DECISION, "patients of rural partner clinics");
         m.setAwareGapReason("Found by the night-shift lab technician; the clinical lead was told when the morning shift began");
         int id3 = inc.report(meera, m);
