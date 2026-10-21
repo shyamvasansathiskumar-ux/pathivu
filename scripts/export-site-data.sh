@@ -7,12 +7,12 @@
 set -e
 cd "$(dirname "$0")/.."
 MYSQL=${MYSQL:-"mysql -u root"}
-scripts/build.sh > /dev/null
+bash scripts/build.sh > /dev/null
 java -cp "out:lib/*" pathivu.tools.ExportVectors docs/vectors.json
-scripts/reset-db.sh > /dev/null
+bash scripts/reset-db.sh > /dev/null
 rm -f docs/refusals.jsonl
 java -Dpathivu.log=docs/refusals.jsonl -cp "out:lib/*" pathivu.TestRunner > /dev/null
-scripts/reset-db.sh > /dev/null
+bash scripts/reset-db.sh > /dev/null
 {
   echo '{"note": "Exported from the demo database after scripts/reset-db.sh. Hashes were computed by Java and re-checked by MySQL SHA2() on insert.",'
   echo '"events": ['

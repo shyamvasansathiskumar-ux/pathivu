@@ -12,6 +12,6 @@ $MYSQL < db/grants.sql
 $MYSQL -e "SET GLOBAL log_bin_trust_function_creators = 1;" || true
 # local helper account for Setup (skip if you use root in db.properties)
 $MYSQL -e "CREATE USER IF NOT EXISTS 'pathivu_admin'@'localhost' IDENTIFIED BY 'admin-local-2026'; GRANT ALL ON pathivu.* TO 'pathivu_admin'@'localhost';"
-scripts/build.sh
+bash scripts/build.sh
 java -cp "out:lib/*" pathivu.tools.Setup
 java -cp "out:lib/*" pathivu.tools.DemoSeeder
