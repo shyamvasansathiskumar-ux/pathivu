@@ -53,6 +53,7 @@ final class Ui {
 
     /** Draws status words in bold colour so what needs attention stands out. */
     static class StatusRenderer extends DefaultTableCellRenderer {
+        StatusRenderer() { Html.noHtml(this); }
         @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean f, int r, int c) {
             JLabel l = (JLabel) super.getTableCellRendererComponent(t, v, sel, f, r, c);
             l.setFont(BOLD);
@@ -67,6 +68,8 @@ final class Ui {
         t.setFillsViewportHeight(true);
         t.setAutoCreateRowSorter(true);
         t.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        t.setDefaultRenderer(Object.class, Html.plainRenderer());   // user text never renders as HTML
+        t.setDefaultRenderer(String.class, Html.plainRenderer());
         for (int c : statusCols) t.getColumnModel().getColumn(c).setCellRenderer(new StatusRenderer());
         return t;
     }

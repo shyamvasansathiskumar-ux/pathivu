@@ -24,6 +24,7 @@ class ReportIncidentDialog extends JDialog {
     private final JComboBox<TriState> cyber = new JComboBox<>(TriState.values());
     private final JTextField tags = new JTextField(24);
     private final JTextField gapReason = new JTextField(36);
+    private final JTextField lateReason = new JTextField(36);
     private final JTextField linkedRef = new JTextField(14);
     // agent
     private final JTextField agentName = new JTextField(20), instruction = new JTextField(30), action = new JTextField(30);
@@ -54,6 +55,8 @@ class ReportIncidentDialog extends JDialog {
             .note("Every legal clock starts at <b>aware</b>. It can never be changed later, only annotated.")
             .add("If aware > 1 h after detected, why?", gapReason)
             .note("Required when there is a gap of more than an hour: a late 'aware' time would delay every clock.")
+            .add("If aware > 7 days ago, why report now?", lateReason)
+            .note("Required for old incidents: an old 'aware' date could fall before a rule was in force.")
             .add("Severity", severity).add("Was anyone attacking?", adversary)
             .add("Cyber security incident?", cyber).note("CERT-In question. UNSURE keeps the 6-hour clock running until a reviewer rules it out.")
             .add("Follows up incident (ref)", linkedRef).note("Optional, e.g. PTV-2026-0003. Closed incidents are never reopened; link a new one instead.")
@@ -93,6 +96,7 @@ class ReportIncidentDialog extends JDialog {
             i.setCyberIncident((TriState) cyber.getSelectedItem());
             for (String t : tags.getText().split(",")) if (!t.isBlank()) i.addTag(t);
             i.setAwareGapReason(gapReason.getText());
+            i.setLateReportReason(lateReason.getText());
             if (!linkedRef.getText().isBlank()) {
                 Integer link = main.incidents.idForRef(linkedRef.getText());
                 if (link == null) throw new IllegalArgumentException("No incident with reference " + linkedRef.getText().trim());

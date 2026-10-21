@@ -21,7 +21,7 @@ class IncidentDialog extends JDialog {
     private IncidentFile file;
     private final boolean reviewer, writer;
 
-    private final JLabel heading = new JLabel();
+    private final JLabel heading = Html.noHtml(new JLabel());
     private final JLabel statusLine = new JLabel();
     private final JPanel moves = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
     private final JTextArea overview = new JTextArea();
@@ -138,7 +138,7 @@ class IncidentDialog extends JDialog {
             heading.setText(i.getRefCode() + "   " + i.getTitle());
             statusLine.setText("<html>Status <b style='color:" + hex(Ui.statusColor(i.getStatus().name())) + "'>" + i.getStatus()
                 + "</b> · Severity <b style='color:" + hex(Ui.statusColor(i.getSeverity().name())) + "'>" + i.getSeverity()
-                + "</b> · " + i.kind() + " · " + file.aiSystem() + "</html>");
+                + "</b> · " + i.kind() + " · " + Html.esc(file.aiSystem()) + "</html>");
             overview.setText(overviewText());
             overview.setCaretPosition(0);
             harms.setRows(file.harms()); evidence.setRows(file.evidence()); mappings.setRows(file.mappings());
@@ -268,11 +268,11 @@ class IncidentDialog extends JDialog {
     }
 
     private void amend() {
-        String[] fields = {"severity", "cyber_incident", "title", "description", "aware_at", "detected_at", "occurred_at"};
+        String[] fields = {"severity", "cyber_incident", "adversary", "title", "description", "aware_at", "detected_at", "occurred_at"};
         JComboBox<String> field = new JComboBox<>(fields);
         JTextField value = new JTextField(30);
         Form f = new Form().add("Field", field).add("New value", value)
-            .note("severity: LOW / MEDIUM / HIGH / CRITICAL · cyber_incident: YES / NO / UNSURE<br>"
+            .note("severity: LOW / MEDIUM / HIGH / CRITICAL · cyber_incident: YES / NO / UNSURE · adversary: NONE / SUSPECTED / CONFIRMED<br>"
                 + "Times are never overwritten: a correction is recorded beside the original and the clocks stay where they are.");
         if (JOptionPane.showConfirmDialog(this, f, "Amend", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
         String reason = Ui.askReason(this, "Reason", "Why is this being corrected?", 10);
@@ -282,7 +282,8 @@ class IncidentDialog extends JDialog {
         after(Ui.attempt(this, "Amend", () -> {
             if (fld.equals("severity")) Severity.valueOf(v.toUpperCase());
             if (fld.equals("cyber_incident")) TriState.valueOf(v.toUpperCase());
-            boolean upper = fld.equals("severity") || fld.equals("cyber_incident");
+            if (fld.equals("adversary")) Adversary.valueOf(v.toUpperCase());
+            boolean upper = fld.equals("severity") || fld.equals("cyber_incident") || fld.equals("adversary");
             main.incidents.amend(main.user, id, fld, upper ? v.toUpperCase() : v, reason);
         }));
     }
@@ -352,9 +353,9 @@ class IncidentDialog extends JDialog {
     private void citation() {
         ObligationClock k = selected(clockT, clocks, "a clock");
         if (k == null) return;
-        JOptionPane.showMessageDialog(this, "<html><body style='width:380px'><b>" + k.rule().name() + "</b><br><br>" + k.rule().citation()
+        JOptionPane.showMessageDialog(this, "<html><body style='width:380px'><b>" + Html.esc(k.rule().name()) + "</b><br><br>" + Html.esc(k.rule().citation())
             + "<br><br>In force from " + Times.ist(k.rule().effectiveFrom()) + "<br>Window: " + k.rule().windowText()
-            + (k.ruledOutReason() == null ? "" : "<br><br><b>Ruled out:</b> " + k.ruledOutReason()) + "</body></html>");
+            + (k.ruledOutReason() == null ? "" : "<br><br><b>Ruled out:</b> " + Html.esc(k.ruledOutReason())) + "</body></html>");
     }
 
     private void readNotice() {
