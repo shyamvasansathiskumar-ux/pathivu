@@ -105,7 +105,7 @@ src/pathivu/
   tools/     Setup (users), DemoSeeder
 test/      TestRunner (no JUnit needed), UiSmoke (screenshots), ExportVectors, SampleReport
 docs/      the website (GitHub Pages): a JavaScript port of the engine, checked against the Java output
-notes/     ANALYSIS.md, MASTER-PROMPT.md, a sample report
+notes/     ANALYSIS.md, a sample report
 ```
 
 ## The website
