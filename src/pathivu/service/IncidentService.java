@@ -155,7 +155,7 @@ public class IncidentService {
     public void proposeMapping(AppUser by, int incidentId, int nodeId, String rationale, Confidence conf) {
         Guard.requireWriter(by, "propose mappings");
         db.tx(c -> {
-            mappings.insertSuggestion(c, incidentId, nodeId, rationale, conf, by.id());
+            mappings.insertSuggestion(c, incidentId, nodeId, rationale, conf, by.id(), false);
             audit.append(c, incidentId, by.id(), "MAPPING_PROPOSED", nodeLabel(c, nodeId) + ": " + rationale);
             return null;
         });

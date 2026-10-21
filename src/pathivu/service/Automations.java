@@ -52,7 +52,7 @@ final class Automations {
         for (MappingSuggestion s : mappers.suggestAll(i, harms.listFor(c, incidentId))) {
             TaxonomyNode node = taxonomy.findCurrent(c, s.framework(), s.code());
             if (node == null || mappings.exists(c, incidentId, node.id())) continue;
-            mappings.insertSuggestion(c, incidentId, node.id(), s.rationale(), s.confidence(), actorId);
+            mappings.insertSuggestion(c, incidentId, node.id(), s.rationale(), s.confidence(), actorId, true);
             added++;
         }
         if (added > 0) audit.append(c, incidentId, actorId, "MAPPINGS_SUGGESTED", added + " suggestion(s) waiting for a reviewer");

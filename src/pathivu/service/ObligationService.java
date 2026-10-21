@@ -41,7 +41,8 @@ public class ObligationService {
 
     public int draftNotice(AppUser by, int clockId, String body) {
         Guard.requireWriter(by, "draft notices");
-        if (body == null || body.isBlank()) throw new IllegalArgumentException("The notice is empty");
+        if (body == null || body.trim().length() < 30)
+            throw new IllegalArgumentException("Write the notice properly (at least 30 characters): it is what the regulator reads.");
         return db.tx(c -> {
             ObligationClock k = clocks.find(c, clockId);
             int id = notices.insertDraft(c, clockId, k.rule().recipient(), body.trim(), by.id());
