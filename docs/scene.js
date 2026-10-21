@@ -110,6 +110,8 @@ createWorld(document.getElementById("world"), async ({ scene, camera, mobile }) 
   }
 
   const look = new THREE.Vector3();
+  scene.userData.logo = [reg, dial];   // shown small and centred while the page loads
+
   return (st) => {
     const [x, y, z, sc, fan, pull, tilt, cx, cy, cz] = frame(st.stage, st.mobile);
     const t = st.t;
