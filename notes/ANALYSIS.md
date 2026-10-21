@@ -1,17 +1,17 @@
 # Pathivu: status, analysis and loopholes
 
-20 Oct 2026 (third pass: 23 more loopholes closed, 40 more tests, plain-words guide added to the site)
+21 Oct 2026 (fourth pass: 5 more loopholes closed, 110 tests; third pass on 20 Oct closed 23 and added the plain-words guide)
 
 ## 1. Status
 
 | Part | State |
 |---|---|
-| Database: 21 tables, 36 triggers, 4 guard procedures, 2 views, restricted app account | Done, loaded on MySQL 8.0 |
+| Database: 21 tables, 36 triggers, 4 guard procedures, 2 views, restricted app account (pass 4 adds 1 column and 2 CHECKs) | Done, loaded on MySQL 8.0 |
 | Java core: model, rules, mappers, workflow, security | Done |
 | JDBC layer: 13 DAOs, transactions, hash-chained audit with anchors | Done |
 | Services: report, harms, evidence, amendments, mappings, workflow, clocks, notices, report export | Done |
 | Swing UI: login, register, deadlines, audit trail, report dialog, incident screen with 6 tabs | Done, screenshot-tested |
-| Tests | 106 of 106 pass (23 logic, 20 service, 63 attacks), about 15 s per run, stable over repeated runs |
+| Tests | 110 of 110 pass (23 logic, 22 service, 65 attacks), about 15 s per run, stable over repeated runs |
 | Demo data | 4 incidents, one each: running, overdue, met late, closed |
 | Website | shyamvasansathiskumar-ux.github.io/pathivu: the engine ported to JavaScript, 240/240 cases matching the Java output, real MySQL refusals, a tamper lab on the real audit chain, and `learn.html`, a plain-words guide for non-technical readers |
 
@@ -135,6 +135,16 @@ Found in two rounds: my own review, then an adversarial review that probed the l
 |---|---|---|
 | 40 | Swing renders any label text starting with `<html>` as HTML, including a typed incident title. One user could change what another sees, or make the app fetch an image from the internet. | `ui/Html`: user text is escaped inside our own HTML; tables and headings that show user text have HTML switched off. Tested. |
 | 41 | An unknown username was refused in about 1 ms and a wrong password in about 300 ms (PBKDF2), so a stopwatch revealed which usernames exist. | A dummy PBKDF2 runs for unknown users. Tested by timing. |
+
+## 5d. Loopholes found in pass 4 (21 Oct 2026)
+
+| # | Loophole | Fix |
+|---|---|---|
+| 42 | A notice could be addressed to anyone ("Internal team") and still meet a CERT-In clock once approved and sent. | `trg_notice_bi`: the recipient must be exactly the one the rule names. |
+| 43 | A one-word notice ("x") could meet a legal clock. | `ck_notice_body`: at least 30 characters, plus the same check in Java. |
+| 44 | Sending an incident back to TRIAGED needed a reason only in Java. | The trigger requires the announcing audit event to say `… because <10+ characters>`. |
+| 45 | A reviewer could type in a mapping and confirm it themselves: four eyes held for code suggestions, not for people's. | `incident_mapping.source` (ENGINE or PERSON); a PERSON's proposal must be confirmed by someone else. |
+| 46 | The repo stores the scripts without the executable bit (uploaded through the browser), so `scripts/test.sh` failed with "Permission denied" for anyone who cloned it, including an examiner. | Scripts call each other with `bash`, and every instruction says `bash scripts/…`. |
 
 ## 6. Fact check, corrected
 
