@@ -34,19 +34,19 @@ mysql -u root -p < db/grants.sql
 #    admin.* = root and YOUR root password (only Setup uses it)
 
 # 3. build
-scripts/build.sh            # Windows: see "Windows" below
+bash scripts/build.sh       # Windows: see "Windows" below
 
 # 4. create the four demo users, then load four demo incidents
 java -cp "out:lib/*" pathivu.tools.Setup
 java -cp "out:lib/*" pathivu.tools.DemoSeeder
 ```
 
-On Linux with MySQL root on socket login, `scripts/reset-db.sh` does steps 1, 3 and 4 in one go.
+On Linux with MySQL root on socket login, `bash scripts/reset-db.sh` does steps 1, 3 and 4 in one go.
 
 ## Run
 
 ```bash
-scripts/run.sh              # or: java -cp "out:lib/*" pathivu.ui.App
+bash scripts/run.sh         # or: java -cp "out:lib/*" pathivu.ui.App
 ```
 
 Demo logins (password `Pathivu@2026`):
@@ -63,10 +63,10 @@ Five wrong passwords in 15 minutes lock a username for 15 minutes (signing in co
 ## Test
 
 ```bash
-scripts/test.sh
+bash scripts/test.sh
 ```
 
-Resets the database and runs **106 tests**: 23 on pure logic, 20 on services against MySQL, and 63 attacks where the app's own database account tries to break the rules with raw SQL (plus root tampering with the audit trail). Every attack must be refused by MySQL itself.
+Resets the database and runs **110 tests**: 23 on pure logic, 22 on services against MySQL, and 65 attacks where the app's own database account tries to break the rules with raw SQL (plus root tampering with the audit trail). Every attack must be refused by MySQL itself.
 
 ## Windows
 
@@ -87,7 +87,7 @@ Easiest is IntelliJ: open the folder, mark `src` and `test` as source roots, add
 4. Try **Move to ASSESSED**: it lists exactly what is missing.
 5. Overview → **What if?** → `2027-06-01 10:00`. The three DPDP Rule 7 clocks appear, because the rule would be in force then. Nothing is saved.
 6. Deadlines & notices → **Draft notice** as arjun, then try **Approve** as arjun: refused (four eyes). Log in as kavya to approve.
-7. **Audit trail** → **Save anchor**, then **Verify chain**. Then show `scripts/test.sh`, where root rewrites history and re-hashes everything: `verify()` is fooled, the anchor is not.
+7. **Audit trail** → **Save anchor**, then **Verify chain**. Then show `bash scripts/test.sh`, where root rewrites history and re-hashes everything: `verify()` is fooled, the anchor is not.
 
 ## Project layout
 
@@ -117,7 +117,7 @@ notes/     ANALYSIS.md, MASTER-PROMPT.md, a sample report
 Regenerate the data after changing the engine or the schema:
 
 ```bash
-scripts/export-site-data.sh     # vectors.json, refusals.jsonl, audit-sample.json
+bash scripts/export-site-data.sh   # vectors.json, refusals.jsonl, audit-sample.json
 ```
 
 ## Credits
