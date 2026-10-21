@@ -44,14 +44,17 @@ public class TestRunner {
     static void check(boolean ok, String msg) { if (!ok) throw new AssertionError(msg); }
 
     /** The SQL must fail, and the error message must contain the hint. */
-    static void refused(Connection c, String sql, String hint) {
+    static void refused(Connection c, String sql, String hint) { refusedAs(c, sql, hint, sql); }
+
+    /** Same, but the log (and so the website) shows `shown`, e.g. with the SET that came first. */
+    static void refusedAs(Connection c, String sql, String hint, String shown) {
         try (Statement st = c.createStatement()) {
             st.executeUpdate(sql);
             throw new AssertionError("Database ACCEPTED: " + sql);
         } catch (SQLException e) {
             String m = String.valueOf(e.getMessage()).toLowerCase();
             check(m.contains(hint.toLowerCase()), "refused, but for another reason: " + e.getMessage());
-            log(sql, e);
+            log(shown, e);
         }
     }
 
@@ -93,6 +96,7 @@ public class TestRunner {
             Db admin = Db.fromFile(props, "admin.");
             serviceTests(app);
             lockoutTest(app);
+            pass3ServiceTests(app);
             System.out.println("\nPart 3: attacks (raw SQL as the app account)");
             attackTests(app, admin);
         } else {
@@ -241,6 +245,26 @@ public class TestRunner {
             String a = AuditDao.computeHash("0".repeat(64), 1, 2, "X", "d", t);
             check(a.equals(AuditDao.computeHash("0".repeat(64), 1, 2, "X", "d", t)), "not deterministic");
             check(!a.equals(AuditDao.computeHash("0".repeat(64), 1, 2, "X", "e", t)), "details change not detected");
+        });
+
+        // ---- pass 3
+        String evil = "<html><img src='http://attacker.example/pixel.png'><b>All clear</b>";
+        test("Swing would render a typed title as HTML (the risk is real)", () -> {
+            javax.swing.JLabel l = new javax.swing.JLabel(evil);
+            check(l.getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey) != null, "plain JLabel did not parse HTML");
+        });
+        test("labels that show user text keep it as plain text", () -> {
+            javax.swing.JLabel l = pathivu.ui.Html.noHtml(new javax.swing.JLabel());
+            l.setText(evil);
+            check(l.getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey) == null, "HTML was rendered");
+        });
+        test("table cells show user text as plain text", () -> {
+            var r = pathivu.ui.Html.plainRenderer();
+            var comp = (javax.swing.JComponent) r.getTableCellRendererComponent(new javax.swing.JTable(1, 1), evil, false, false, 0, 0);
+            check(comp.getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey) == null, "HTML was rendered in a cell");
+        });
+        test("user text inside our own HTML is escaped", () -> {
+            check(pathivu.ui.Html.esc("<b>A & 'B'</b>").equals("&lt;b&gt;A &amp; &#39;B&#39;&lt;/b&gt;"), pathivu.ui.Html.esc("<b>A & 'B'</b>"));
         });
     }
 
@@ -402,6 +426,51 @@ public class TestRunner {
         });
     }
 
+    static void pass3ServiceTests(Db app) {
+        IncidentService inc = new IncidentService(app);
+        AuthService auth = new AuthService(app);
+        test("a long description can be amended (the old value is over 255 characters)", () -> {
+            String longer = "The agent ran a cleanup job with production credentials. ".repeat(12).trim();
+            inc.amend(arjun, 1, "description", longer, "full account from the on-call engineer");
+            String back = "Back to the short version: " + "x".repeat(300);
+            inc.amend(arjun, 1, "description", back, "shortened after review, long text kept in amendment");
+            check(inc.load(1).incident().getDescription().equals(back), "description not changed");
+            check(inc.load(1).amendments().stream().anyMatch(a -> longer.equals(a.oldValue()) || longer.equals(a.newValue())),
+                  "the long value was not kept in the amendment history");
+        });
+        test("reporting more than 7 days after awareness needs a reason", () -> {
+            Instant old = Instant.now().minusSeconds(10 * 86400L);
+            var late = agent(old, Adversary.NONE, false, true);
+            var e = throwsA(IllegalArgumentException.class, () -> inc.report(meera, late));
+            check(e.getMessage().contains("days ago"), e.getMessage());
+            var late2 = agent(old, Adversary.NONE, false, true);
+            late2.setLateReportReason("found during the quarterly log review, nobody raised it at the time");
+            int lid = inc.report(meera, late2);
+            check(inc.load(lid).incident().getLateReportReason() != null, "reason lost");
+        });
+        test("the adversary answer can change, with a reason", () -> {
+            inc.amend(arjun, 1, "adversary", "SUSPECTED", "new logs show an outside prompt in the ticket");
+            check(inc.load(1).incident().getAdversary() == Adversary.SUSPECTED, "adversary not changed");
+        });
+        test("an unknown username takes as long to refuse as a wrong password", () -> {
+            long t0 = System.nanoTime();
+            for (int n = 0; n < 2; n++) throwsA(AccessDenied.class, () -> auth.login("kavya", "wrong".toCharArray()));
+            long wrong = System.nanoTime() - t0;
+            t0 = System.nanoTime();
+            for (int n = 0; n < 2; n++) throwsA(AccessDenied.class, () -> auth.login("ghost-user", "wrong".toCharArray()));
+            long unknown = System.nanoTime() - t0;
+            check(unknown > wrong / 2, "unknown user answered in " + unknown / 1_000_000 + " ms vs " + wrong / 1_000_000 + " ms");
+        });
+    }
+
+    /** A second app connection that has changed one of its own session settings. */
+    static void sessionRefused(Db app, String set, String sql, String hint) throws Exception {
+        try (Connection d = app.open(); Statement st = d.createStatement()) {
+            st.execute(set);
+            refusedAs(d, sql, hint, set + "; " + sql);
+        }
+    }
+
     // ------------------------------------------------------------------ Part 3
 
     static void attackTests(Db app, Db admin) throws Exception {
@@ -485,6 +554,154 @@ public class TestRunner {
             test("cannot add an audit event that branches off an old point", () -> refused(c,
                 "INSERT INTO audit_event (incident_id,actor_id,action,details,created_at,prev_hash,hash) "
               + "VALUES (NULL,1,'X','fork',UTC_TIMESTAMP(3),REPEAT('0',64),REPEAT('e',64))", "chain head"));
+
+            // ---------------- pass 3
+            test("SET timestamp really moves the session's clock back 3 days (the risk is real)", () -> {
+                try (Connection d = app.open(); Statement st = d.createStatement()) {
+                    st.execute("SET timestamp = UNIX_TIMESTAMP() - 3*86400");
+                    try (ResultSet rs = st.executeQuery("SELECT TIMESTAMPDIFF(HOUR, UTC_TIMESTAMP(), SYSDATE()) - TIMESTAMPDIFF(HOUR, UTC_TIMESTAMP(), NOW())")) {
+                        rs.next(); check(rs.getInt(1) == 72, "clock did not move: " + rs.getInt(1));
+                    }
+                }
+            });
+            test("a session with a faked clock cannot send a notice or sign in", () -> {
+                sessionRefused(app, "SET timestamp = UNIX_TIMESTAMP() - 3*86400",
+                    "UPDATE notification SET approved_by = 3 WHERE notification_id = 4", "changed its clock");
+                sessionRefused(app, "SET timestamp = UNIX_TIMESTAMP() - 3*86400",
+                    "INSERT INTO login_attempt (username, success) VALUES ('clock', FALSE)", "changed its clock");
+            });
+            test("a session with a faked clock cannot write a backdated audit event", () -> {
+                try (Connection d = app.open(); Statement st = d.createStatement()) {
+                    st.execute("SET timestamp = UNIX_TIMESTAMP() - 86400");
+                    st.execute("SET @head = (SELECT last_hash FROM audit_chain_head WHERE id = 1), @t = UTC_TIMESTAMP(3)");
+                    st.execute("SET @h = SHA2(CONCAT_WS('|', @head, '-', 1, 'X', 'yesterday', DATE_FORMAT(@t, '%Y-%m-%d %H:%i:%s.%f')), 256)");
+                    String ins = "INSERT INTO audit_event (incident_id,actor_id,action,details,created_at,prev_hash,hash) "
+                               + "VALUES (NULL,1,'X','yesterday',@t,@head,@h)";
+                    refusedAs(d, ins, "changed its clock", "SET timestamp = UNIX_TIMESTAMP() - 86400; /* hash computed for 'yesterday' */ " + ins);
+                }
+            });
+            test("cannot switch off foreign keys to attach a harm to nothing", () -> sessionRefused(app,
+                "SET foreign_key_checks = 0",
+                "INSERT INTO harm (incident_id,category,description,personal_data,recorded_by) VALUES (9999,'OTHER','orphan','NO',77)", "key checks"));
+            test("cannot switch off foreign keys to add evidence from a user who does not exist", () -> sessionRefused(app,
+                "SET foreign_key_checks = 0",
+                "INSERT INTO evidence (incident_id,label,file_name,size_bytes,sha256,added_by) VALUES (2,'x','x',1,REPEAT('a',64),77)", "key checks"));
+            test("cannot switch off unique checks", () -> sessionRefused(app,
+                "SET unique_checks = 0", "INSERT INTO incident_tag (incident_id, tag) VALUES (2, 'dup-probe')", "key checks"));
+            test("cannot switch off strict mode to squeeze in bad values", () -> sessionRefused(app,
+                "SET sql_mode = ''",
+                "INSERT INTO harm (incident_id,category,description,personal_data,recorded_by) VALUES (2,'MADE_UP','x','NO',1)", "ck_harm_category_valid"));
+            test("cannot future-date an amendment to pre-approve a later change", () -> {
+                try (Statement st = c.createStatement()) {
+                    st.executeUpdate("INSERT INTO incident_amendment (incident_id,field_name,old_value,new_value,reason,amended_by,amended_at) "
+                                   + "VALUES (2,'severity','HIGH','LOW','prepared well in advance',1, UTC_TIMESTAMP() + INTERVAL 1 YEAR)");
+                    try (ResultSet rs = st.executeQuery("SELECT ABS(TIMESTAMPDIFF(SECOND, MAX(amended_at), UTC_TIMESTAMP())) FROM incident_amendment WHERE incident_id = 2")) {
+                        rs.next(); check(rs.getInt(1) < 60, "future date was kept");
+                    }
+                }
+            });
+            test("cannot backdate when a harm was recorded", () -> {
+                try (Statement st = c.createStatement()) {
+                    st.executeUpdate("INSERT INTO harm (incident_id,category,description,personal_data,recorded_by,recorded_at) "
+                                   + "VALUES (2,'OTHER','dated probe','NO',1,'2020-01-01')");
+                    try (ResultSet rs = st.executeQuery("SELECT MAX(recorded_at) > UTC_TIMESTAMP() - INTERVAL 1 MINUTE FROM harm WHERE description = 'dated probe'")) {
+                        rs.next(); check(rs.getBoolean(1), "backdated time was kept");
+                    }
+                }
+            });
+            test("cannot silently rewrite what happened (title)", () -> refused(c,
+                "UPDATE incident SET title = 'Nothing happened' WHERE incident_id = 2", "needs an amendment"));
+            test("cannot silently rewrite what happened (description)", () -> refused(c,
+                "UPDATE incident SET description = 'All fine.' WHERE incident_id = 2", "needs an amendment"));
+            test("a change of case only is still a change (byte-for-byte comparison)", () -> refused(c,
+                "UPDATE incident SET title = UPPER(title) WHERE incident_id = 2", "needs an amendment"));
+            test("cannot move an incident to a different AI system", () -> refused(c,
+                "UPDATE incident SET ai_system_id = IF(ai_system_id = 1, 2, 1) WHERE incident_id = 2", "write-once"));
+            test("cannot change the adversary answer without an amendment", () -> refused(c,
+                "UPDATE incident SET adversary = IF(adversary = 'NONE', 'CONFIRMED', 'NONE') WHERE incident_id = 2", "adversary"));
+            test("cannot wind the audit head back to start a branch", () -> refused(c,
+                "UPDATE audit_chain_head SET last_event_id = 3, last_hash = (SELECT hash FROM audit_event WHERE event_id = 3) WHERE id = 1",
+                "newest audit event"));
+            test("cannot change status without announcing it in the audit trail first", () -> refused(c,
+                "UPDATE incident SET status = 'TRIAGED' WHERE incident_id = 2", "audit trail first"));
+            test("a status change announced by a reporter is refused", () -> {
+                new AuditDao().append(c, 2, 1, "STATUS_CHANGED", "REPORTED -> TRIAGED");   // meera, a reporter
+                refused(c, "UPDATE incident SET status = 'TRIAGED' WHERE incident_id = 2", "only a reviewer");
+            });
+            test("cannot hand your own draft to a colleague's name and then approve it", () -> refused(c,
+                "UPDATE notification SET drafted_by = 3 WHERE notification_id = 4", "write-once"));
+            test("cannot rewrite someone else's draft before approving it", () -> refused(c,
+                "UPDATE notification SET body = 'Nothing to report.' WHERE notification_id = 4", "write-once"));
+            test("cannot swap what a suggested mapping points at", () -> refused(c,
+                "UPDATE incident_mapping SET rationale = 'swapped after the fact, trust me' WHERE state = 'SUGGESTED' LIMIT 1", "write-once"));
+            // ---------------- pass 3b (found by an adversarial review of pass 3)
+            test("cannot send a notice that nobody approved", () -> {
+                refused(c, "UPDATE notification SET sent_at = UTC_TIMESTAMP() WHERE notification_id = 4", "ck_notice_order");
+                refused(c, "UPDATE notification SET approved_at = UTC_TIMESTAMP(), sent_at = UTC_TIMESTAMP() WHERE notification_id = 4", "approved_at");
+            });
+            test("cannot rewrite when a notice was approved", () -> refused(c,
+                "UPDATE notification SET approved_at = '2026-10-19 00:00:00' WHERE notification_id = 1", "approved_at"));
+            test("closed means closed: no tags, amendments or clocks on a closed incident", () -> {
+                refused(c, "INSERT INTO incident_tag (incident_id, tag) VALUES (3, 'late-tag')", "closed");
+                refused(c, "INSERT INTO incident_amendment (incident_id,field_name,old_value,new_value,reason,amended_by) "
+                         + "VALUES (3,'aware_at','(original kept)','2026-01-01','a quiet correction after closing',1)", "closed");
+                refused(c, "INSERT INTO obligation_clock (incident_id, rule_id, started_at, due_at) "
+                         + "SELECT incident_id, 1, aware_at, aware_at + INTERVAL 360 MINUTE FROM incident WHERE incident_id = 3", "closed");
+            });
+            test("the workflow's conditions are enforced by the database too", () -> {
+                new AuditDao().append(c, 1, 2, "STATUS_CHANGED", "TRIAGED -> ASSESSED");   // arjun announces it
+                refused(c, "UPDATE incident SET status = 'ASSESSED' WHERE incident_id = 1", "ASSESSED needs");
+            });
+            test("an overdue clock cannot be ruled out afterwards", () -> refused(c,
+                "UPDATE obligation_clock SET status = 'RULED_OUT', ruled_out_by = 3, "
+              + "ruled_out_reason = 'on reflection this was never reportable' WHERE clock_id = 2", "overdue"));
+            test("a zero date cannot sneak in with strict mode off", () -> sessionRefused(app, "SET sql_mode = ''",
+                "INSERT INTO incident (kind,title,description,ai_system_id,reported_by,occurred_at,detected_at,aware_at,severity,adversary) "
+              + "VALUES ('AGENT','t','d',1,1,'garbage','garbage','garbage','LOW','NONE')", "ck_incident_dates"));
+            test("cannot report an old 'aware' date without saying why", () -> refused(c,
+                "INSERT INTO incident (kind,title,description,ai_system_id,reported_by,occurred_at,detected_at,aware_at,severity,adversary) "
+              + "VALUES ('AGENT','t','d',1,1,'2021-01-01','2021-01-01','2021-01-01','LOW','NONE')", "ck_late_report"));
+            test("the app cannot choose a reference code", () -> {
+                refused(c, "UPDATE incident SET ref_code = 'PTV-1999-0001' WHERE incident_id = 2", "write-once");
+                try (Connection d = app.open(); Statement st = d.createStatement()) {
+                    d.setAutoCommit(false);
+                    try {
+                        st.executeUpdate("INSERT INTO incident (kind,title,description,ai_system_id,reported_by,occurred_at,detected_at,aware_at,severity,adversary,ref_code) "
+                                       + "VALUES ('AGENT','t','d',1,1,UTC_TIMESTAMP(),UTC_TIMESTAMP(),UTC_TIMESTAMP(),'LOW','NONE','PTV-1999-0001')");
+                        try (ResultSet rs = st.executeQuery("SELECT ref_code FROM incident WHERE incident_id = LAST_INSERT_ID()")) {
+                            rs.next(); check(rs.getString(1) == null, "a chosen code was kept: " + rs.getString(1));
+                        }
+                        refused(d, "UPDATE incident SET ref_code = 'PTV-1999-0001' WHERE incident_id = LAST_INSERT_ID()", "must be PTV");
+                    } finally { d.rollback(); }
+                }
+            });
+            test("details rows only at birth, and of the incident's own kind", () -> {
+                refused(c, "INSERT INTO data_incident VALUES (1, 'names', 10, 'NO')", "details can only");
+                refused(c, "INSERT INTO agent_incident (incident_id, agent_name, instruction_given, action_taken, credential_beyond_task, had_confirmation_step) "
+                         + "SELECT 3, 'bot', 'x', 'y', FALSE, FALSE", "details can only");
+            });
+            test("a forged 'success' row does not reset the lockout", () -> {
+                try (Statement st = c.createStatement()) {
+                    for (int n = 0; n < 5; n++) st.executeUpdate("INSERT INTO login_attempt (username, success) VALUES ('lock-probe', FALSE)");
+                    st.executeUpdate("INSERT INTO login_attempt (username, success) VALUES ('lock-probe', TRUE)");
+                }
+                check(new LoginDao().recentFailures(c, "lock-probe", 15) >= 5, "the forged success reset the count");
+            });
+            test("a deactivated reviewer cannot approve", () -> {
+                try (Connection a = admin.open(); Statement st = a.createStatement()) {
+                    st.executeUpdate("UPDATE app_user SET active = FALSE WHERE user_id = 3");
+                    try { refused(c, "UPDATE notification SET approved_by = 3 WHERE notification_id = 4", "only a reviewer"); }
+                    finally { st.executeUpdate("UPDATE app_user SET active = TRUE WHERE user_id = 3"); }
+                }
+            });
+            test("cannot approve a notice whose clock was ruled out", () -> {
+                try (Statement st = c.createStatement()) {
+                    st.executeUpdate("INSERT INTO notification (clock_id, recipient, body, drafted_by) VALUES (6, 'CERT-In', 'draft', 1)");
+                    st.executeUpdate("UPDATE obligation_clock SET status = 'RULED_OUT', ruled_out_by = 2, "
+                                   + "ruled_out_reason = 'not a cyber security incident after review' WHERE clock_id = 6");
+                }
+                refused(c, "UPDATE notification SET approved_by = 3 WHERE clock_id = 6 AND approved_by IS NULL", "ruled out");
+            });
         }
 
         // Root rewrites one event AND recomputes every later hash and the head.
