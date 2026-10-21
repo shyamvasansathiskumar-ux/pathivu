@@ -213,6 +213,7 @@ CREATE TABLE incident_mapping (
     rationale    VARCHAR(400) NOT NULL,         -- a mapping without a reason is not allowed
     confidence   ENUM('LOW','MEDIUM','HIGH') NOT NULL,
     mapped_by    INT NOT NULL,                  -- reporter, or the suggestion engine on their behalf
+    source       ENUM('ENGINE','PERSON') NOT NULL DEFAULT 'PERSON',   -- pass 4: who proposed it
     reviewed_by  INT NULL,
     reviewed_at  DATETIME NULL,
     PRIMARY KEY (incident_id, node_id),
@@ -294,6 +295,7 @@ CREATE TABLE notification (
     CONSTRAINT fk_notice_drafter  FOREIGN KEY (drafted_by)  REFERENCES app_user(user_id),
     CONSTRAINT fk_notice_approver FOREIGN KEY (approved_by) REFERENCES app_user(user_id),
     CONSTRAINT ck_notice_four_eyes CHECK (approved_by IS NULL OR approved_by <> drafted_by),
+    CONSTRAINT ck_notice_body     CHECK (CHAR_LENGTH(TRIM(body)) >= 30),   -- pass 4: "x" is not a report
     CONSTRAINT ck_notice_order    CHECK (sent_at IS NULL OR approved_by IS NOT NULL),
     CONSTRAINT ck_notice_approval CHECK ((approved_by IS NULL) = (approved_at IS NULL))   -- pass 3
 );
@@ -341,6 +343,7 @@ ALTER TABLE incident             ADD CONSTRAINT ck_incident_severity_valid CHECK
 ALTER TABLE incident             ADD CONSTRAINT ck_incident_status_valid CHECK (status <> '');
 ALTER TABLE incident_mapping     ADD CONSTRAINT ck_incident_mapping_confidence_valid CHECK (confidence <> '');
 ALTER TABLE incident_mapping     ADD CONSTRAINT ck_incident_mapping_state_valid CHECK (state <> '');
+ALTER TABLE incident_mapping     ADD CONSTRAINT ck_incident_mapping_source_valid CHECK (source <> '');
 ALTER TABLE model_harm_incident  ADD CONSTRAINT ck_model_harm_incident_output_type_valid CHECK (output_type <> '');
 ALTER TABLE obligation_clock     ADD CONSTRAINT ck_obligation_clock_status_valid CHECK (status <> '');
 ALTER TABLE rule_version         ADD CONSTRAINT ck_rule_version_trigger_on_valid CHECK (trigger_on <> '');
@@ -462,6 +465,12 @@ BEGIN
         CALL assert_reviewer(v_actor, 'only a reviewer can move an incident');
         IF NEW.status = 'CLOSED' AND v_actor = OLD.reported_by THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'the reporter of an incident cannot close it';
+        END IF;
+        -- Pass 4: sending an incident back needs a written reason, in the database too
+        IF NEW.status = 'TRIAGED' AND OLD.status IN ('ASSESSED', 'NOTICES_REVIEWED')
+           AND (LOCATE(' because ', v_details) = 0
+                OR CHAR_LENGTH(TRIM(SUBSTRING(v_details, LOCATE(' because ', v_details) + 9))) < 10) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'sending an incident back needs a reason (10+ characters)';
         END IF;
         -- Pass 3: the same conditions IncidentWorkflow.blockers() checks in Java.
         IF NEW.status = 'ASSESSED' THEN
@@ -710,6 +719,12 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'that clock is already met or ruled out';
     END IF;
     CALL assert_open((SELECT incident_id FROM obligation_clock WHERE clock_id = NEW.clock_id));
+    -- Pass 4: a notice to "Internal team" must not meet a CERT-In clock. The
+    -- recipient is the one the rule names, byte for byte.
+    IF NOT EXISTS (SELECT 1 FROM obligation_clock c JOIN rule_version r ON r.rule_id = c.rule_id
+                    WHERE c.clock_id = NEW.clock_id AND r.recipient COLLATE utf8mb4_bin = NEW.recipient COLLATE utf8mb4_bin) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a notice must go to the recipient the rule names';
+    END IF;
     SET NEW.drafted_at = UTC_TIMESTAMP();
 END//
 
@@ -866,8 +881,13 @@ BEGIN
     IF NOT (NEW.node_id <=> OLD.node_id) OR NOT (NEW.incident_id <=> OLD.incident_id)
        OR NOT (NEW.mapped_by <=> OLD.mapped_by)
        OR NOT (NEW.rationale COLLATE utf8mb4_bin <=> OLD.rationale COLLATE utf8mb4_bin)
-       OR NOT (NEW.confidence <=> OLD.confidence) THEN
+       OR NOT (NEW.confidence <=> OLD.confidence) OR NOT (NEW.source <=> OLD.source) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a suggestion is write-once; only its review can be recorded';
+    END IF;
+    -- Pass 4: code proposes and a person decides; when a PERSON proposes,
+    -- a different person decides
+    IF NEW.state <> 'SUGGESTED' AND OLD.source = 'PERSON' AND NEW.reviewed_by = OLD.mapped_by THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'a reviewer cannot confirm a mapping they proposed themselves';
     END IF;
     CALL assert_open(OLD.incident_id);
     IF NEW.state <> 'SUGGESTED' THEN
