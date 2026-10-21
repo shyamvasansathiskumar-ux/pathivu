@@ -332,7 +332,7 @@ public class TestRunner {
 
         test("four eyes: the drafter of a notice cannot approve it", () -> {
             int clock = inc.load(id[0]).clocks().get(0).id();
-            int n = obl.draftNotice(arjun, clock, "Report to CERT-In");
+            int n = obl.draftNotice(arjun, clock, "Report to CERT-In: the agent dropped the production table.");
             throwsA(AccessDenied.class, () -> obl.approveNotice(arjun, n));
             obl.approveNotice(kavya, n);
         });
@@ -429,6 +429,37 @@ public class TestRunner {
     static void pass3ServiceTests(Db app) {
         IncidentService inc = new IncidentService(app);
         AuthService auth = new AuthService(app);
+        // ---- pass 4
+        test("a reviewer cannot confirm a mapping they proposed by hand; a colleague can", () -> {
+            int node;
+            try (Connection c = app.open(); Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT MIN(node_id) FROM taxonomy_node WHERE node_id NOT IN "
+                                              + "(SELECT node_id FROM incident_mapping WHERE incident_id = 2)")) { rs.next(); node = rs.getInt(1); }
+            inc.proposeMapping(arjun, 2, node, "Arjun thinks this category fits the leak", Confidence.MEDIUM);
+            var e = throwsA(DataException.class, () -> inc.reviewMapping(arjun, 2, node, true));
+            check(e.getMessage().contains("proposed themselves"), e.getMessage());
+            inc.reviewMapping(kavya, 2, node, true);
+        });
+        test("sending an incident back needs a reason, in the database too", () -> {
+            var a = agent(Instant.now().minusSeconds(1800), Adversary.NONE, true, false);
+            var mine = new AgentIncident(a.getTitle(), a.getDescription(), 1, meera.id(), a.getOccurredAt(), a.getDetectedAt(),
+                a.getAwareAt(), Severity.HIGH, Adversary.NONE, "Bot", "fix", "dropped the table", true, false);
+            mine.setCyberIncident(TriState.YES);
+            int id = inc.report(meera, mine);
+            inc.addHarm(meera, id, Harm.draft(HarmCategory.DATA_LOSS, "bookings table lost", 120, TriState.NO));
+            Path tmp = Files.createTempFile("ev", ".log"); Files.writeString(tmp, "DROP TABLE bookings;");
+            inc.addEvidence(meera, id, "Agent transcript", tmp);
+            var m = inc.load(id).mappings().get(0);
+            inc.reviewMapping(arjun, id, m.node().id(), true);
+            inc.move(arjun, id, IncidentStatus.TRIAGED, null);
+            inc.move(arjun, id, IncidentStatus.ASSESSED, null);
+            try (Connection c = app.open()) {
+                new AuditDao().append(c, id, arjun.id(), "STATUS_CHANGED", "ASSESSED -> TRIAGED");
+                refused(c, "UPDATE incident SET status = 'TRIAGED' WHERE incident_id = " + id, "needs a reason");
+            }
+            inc.move(arjun, id, IncidentStatus.TRIAGED, "the harm count was wrong, recount first");
+            check(inc.load(id).incident().getStatus() == IncidentStatus.TRIAGED, "not sent back");
+        });
         test("a long description can be amended (the old value is over 255 characters)", () -> {
             String longer = "The agent ran a cleanup job with production credentials. ".repeat(12).trim();
             inc.amend(arjun, 1, "description", longer, "full account from the on-call engineer");
@@ -509,7 +540,7 @@ public class TestRunner {
                 "UPDATE notification SET approved_by = 1 WHERE notification_id = 1", "only a reviewer"));
             test("a reviewer cannot approve a notice they drafted (CHECK constraint)", () -> {
                 try (Statement st = c.createStatement()) {   // arjun (user 2) drafts a notice for clock 1
-                    st.executeUpdate("INSERT INTO notification (clock_id, recipient, body, drafted_by) VALUES (1, 'CERT-In', 'draft', 2)");
+                    st.executeUpdate("INSERT INTO notification (clock_id, recipient, body, drafted_by) VALUES (1, 'CERT-In', 'Draft report: agent dropped the bookings table.', 2)");
                 }
                 refused(c, "UPDATE notification SET approved_by = 2 WHERE drafted_by = 2 AND approved_by IS NULL", "four_eyes");
             });
@@ -694,9 +725,14 @@ public class TestRunner {
                     finally { st.executeUpdate("UPDATE app_user SET active = TRUE WHERE user_id = 3"); }
                 }
             });
+            test("a notice to the wrong recipient cannot meet a legal clock", () -> refused(c,
+                "INSERT INTO notification (clock_id, recipient, body, drafted_by) "
+              + "VALUES (1, 'Internal team', 'FYI: the agent dropped a table, all handled.', 1)", "recipient the rule names"));
+            test("a one-word notice is not a report", () -> refused(c,
+                "INSERT INTO notification (clock_id, recipient, body, drafted_by) VALUES (1, 'CERT-In', 'x', 1)", "ck_notice_body"));
             test("cannot approve a notice whose clock was ruled out", () -> {
                 try (Statement st = c.createStatement()) {
-                    st.executeUpdate("INSERT INTO notification (clock_id, recipient, body, drafted_by) VALUES (6, 'CERT-In', 'draft', 1)");
+                    st.executeUpdate("INSERT INTO notification (clock_id, recipient, body, drafted_by) VALUES (6, 'CERT-In', 'Draft report: support bot showed phone numbers.', 1)");
                     st.executeUpdate("UPDATE obligation_clock SET status = 'RULED_OUT', ruled_out_by = 2, "
                                    + "ruled_out_reason = 'not a cyber security incident after review' WHERE clock_id = 6");
                 }
