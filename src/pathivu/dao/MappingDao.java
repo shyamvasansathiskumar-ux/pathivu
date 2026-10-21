@@ -14,12 +14,13 @@ public class MappingDao {
         }
     }
 
+    /** byEngine: true when the suggestion engine proposed it, false when a person typed it in. */
     public void insertSuggestion(Connection c, int incidentId, int nodeId, String rationale,
-                                 Confidence conf, int mappedBy) throws SQLException {
-        String sql = "INSERT INTO incident_mapping (incident_id, node_id, rationale, confidence, mapped_by) VALUES (?,?,?,?,?)";
+                                 Confidence conf, int mappedBy, boolean byEngine) throws SQLException {
+        String sql = "INSERT INTO incident_mapping (incident_id, node_id, rationale, confidence, mapped_by, source) VALUES (?,?,?,?,?,?)";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, incidentId); ps.setInt(2, nodeId); ps.setString(3, rationale);
-            ps.setString(4, conf.name()); ps.setInt(5, mappedBy);
+            ps.setString(4, conf.name()); ps.setInt(5, mappedBy); ps.setString(6, byEngine ? "ENGINE" : "PERSON");
             ps.executeUpdate();
         }
     }
