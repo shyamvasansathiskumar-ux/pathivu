@@ -1,21 +1,21 @@
 # Pathivu: status, analysis and loopholes
 
-19 Oct 2026 (second pass: 6 more loopholes closed, website added)
+20 Oct 2026 (third pass: 23 more loopholes closed, 40 more tests, plain-words guide added to the site)
 
 ## 1. Status
 
 | Part | State |
 |---|---|
-| Database: 21 tables, 28 triggers, 2 views, restricted app account | Done, loaded on MySQL 8.0 |
+| Database: 21 tables, 36 triggers, 4 guard procedures, 2 views, restricted app account | Done, loaded on MySQL 8.0 |
 | Java core: model, rules, mappers, workflow, security | Done |
 | JDBC layer: 13 DAOs, transactions, hash-chained audit with anchors | Done |
 | Services: report, harms, evidence, amendments, mappings, workflow, clocks, notices, report export | Done |
 | Swing UI: login, register, deadlines, audit trail, report dialog, incident screen with 6 tabs | Done, screenshot-tested |
-| Tests | 66 of 66 pass (19 logic, 16 service, 31 attacks), about 10 s per run, stable over repeated runs |
+| Tests | 106 of 106 pass (23 logic, 20 service, 63 attacks), about 15 s per run, stable over repeated runs |
 | Demo data | 4 incidents, one each: running, overdue, met late, closed |
-| Website | shyamvasansathiskumar-ux.github.io/pathivu: the engine ported to JavaScript, 240/240 cases matching the Java output, real MySQL refusals, a tamper lab on the real audit chain |
+| Website | shyamvasansathiskumar-ux.github.io/pathivu: the engine ported to JavaScript, 240/240 cases matching the Java output, real MySQL refusals, a tamper lab on the real audit chain, and `learn.html`, a plain-words guide for non-technical readers |
 
-Size: about 3,600 lines of Java across 82 files, 790 lines of SQL and 750 lines of tests. The only dependency is the MySQL JDBC driver.
+Size: about 3,700 lines of Java across 83 files, 920 lines of SQL and 770 lines of tests. The only dependency is the MySQL JDBC driver.
 
 ## 2. How it is built (the plan, as it ended up)
 
@@ -84,6 +84,58 @@ Pathivu joins the two halves in one record: AI failure analysis on one side, Ind
 | 17 | `verify()` cannot catch root rewriting and re-hashing the whole chain. | Anchors (see 10). |
 | 18 | Regulator extensions had nowhere to go. | `clock_extension` (see 9). |
 
+## 5c. Loopholes found in pass 3 (20 Oct 2026)
+
+Found in two rounds: my own review, then an adversarial review that probed the live database as `pathivu_app` inside rolled-back transactions. Every fix has a test that attacks it.
+
+**Session tricks: any connection can change its own settings, no privilege needed**
+
+| # | Loophole | Fix |
+|---|---|---|
+| 19 | `SET timestamp = …` moves `NOW()` and `UTC_TIMESTAMP()` for that session. "The database clock" could be set back 3 days, then a notice marked sent "on time", a login failure backdated, an audit event written for yesterday. Tested: the clock really moved 72 hours. | `assert_honest_session()` runs first in every protective trigger: it compares `NOW()` with `SYSDATE()` (which ignores `SET timestamp`) and refuses a gap over 5 seconds. |
+| 20 | `SET foreign_key_checks = 0` let the app attach a harm to incident 9999 and evidence to a user who does not exist. | Same guard refuses a session with key checks (or `unique_checks`) off. |
+| 21 | `SET sql_mode = ''` turns an unknown ENUM value into `''` and a bad date into `0000-00-00`, with only a warning. A trigger cannot see this: **a trigger runs with the sql_mode it was created with**. | CHECK constraints work whatever the sql_mode: every ENUM column refuses `''`, and `occurred_at >= '2000-01-01'` refuses zero dates. |
+
+**Times the app could still choose**
+
+| # | Loophole | Fix |
+|---|---|---|
+| 22 | `amended_at` came from the app. An amendment dated a year ahead would "pre-approve" a silent severity change any time that year. | Every insert-time stamp (`created_at`, `recorded_at`, `added_at`, `drafted_at`, `amended_at`) is overwritten by the trigger. |
+| 23 | `approved_at` could be rewritten on an already sent notice. | Only the trigger sets it, once, at approval. |
+| 24 | An "aware" date years in the past put the incident before CERT-In existed, so no clock started. | `ck_late_report`: aware more than 7 days before the report needs a written reason (Java check, UI field and CHECK). |
+
+**Silent edits**
+
+| # | Loophole | Fix |
+|---|---|---|
+| 25 | Title and description could be rewritten with a plain UPDATE: "what happened" changed with no trace. | Need an amendment row first (trigger-checked), like severity. |
+| 26 | The table collation is case- and accent-insensitive, so `'Résumé' = 'resume'` is TRUE in MySQL. A case-only change slipped past `<>`. | Text is compared `COLLATE utf8mb4_bin` (byte for byte). |
+| 27 | The incident could be moved to a different AI system; the adversary answer changed with no reason. | `ai_system_id` write-once; adversary needs an amendment (now offered in the Amend dialog). |
+| 28 | Amendment values were `VARCHAR(255)` and Java cut them to 252 characters: amending a long description lost the old text. | `TEXT`, nothing cut. |
+| 29 | The app could choose any `ref_code`. | The trigger clears it on insert and accepts only `PTV-<year aware, IST>-<id>`. |
+| 30 | A second details row could be added later, or AGENT details attached to a DATA incident. | Details only while `ref_code` is still NULL (the same transaction) and only of the incident's own kind. |
+| 31 | A draft notice's text, author or clock could be changed, so a reviewer could rewrite a colleague's draft, or put a colleague's name on their own draft, and then approve it. The four-eyes CHECK never noticed. | Notices are write-once; a new draft replaces an old one. Mapping suggestions are write-once too. |
+
+**Rules that lived only in Java**
+
+| # | Loophole | Fix |
+|---|---|---|
+| 32 | The database could not tell who changed an incident's status. A reporter could close their own incident by raw SQL. | A status change is accepted only if the newest audit event for that incident says `OLD -> NEW`, comes from an active reviewer, is under a minute old, and (for CLOSED) is not from the reporter. The service writes the audit event first. |
+| 33 | Forged announcements could still push an incident from REPORTED to CLOSED with no harm, no evidence, no confirmed mapping and no CERT-In clock. | The trigger repeats `IncidentWorkflow.blockers()`, and checks that every rule that applies has its clock before ASSESSED. |
+| 34 | A notice could be "sent" with no approver (only `approved_at` was checked), and that met the clock. | `ck_notice_order` checks `approved_by`; `approved_by` and `approved_at` must be both set or both empty; a clock is met only by an approved, sent notice. |
+| 35 | An overdue clock could be ruled out afterwards, so a missed deadline disappeared from the view. | Refused once the (extended) due time has passed or a notice has gone out: send it late (MET_LATE) instead. Same check in Java. |
+| 36 | "Closed" was checked only for harm, evidence and mapping inserts. Clocks, notices, mapping reviews, tags, amendments and extensions could still be added to a closed incident. | `assert_open()` in every one of those triggers, reading with `FOR SHARE` so it also waits for a close that is happening at that moment. |
+| 37 | The app can UPDATE the audit head (it needs to lock it), so it could wind the head back to an old event and then append a branch. | `trg_head_bu`: the head can only point at the newest event and its hash. |
+| 38 | Role checks used `(SELECT role …) <> 'REVIEWER'`, which is NULL (so passes) for a missing user, and ignored deactivated accounts. | `assert_reviewer()` uses `NOT EXISTS (… role = 'REVIEWER' AND active)`. The reporter can no longer record an extension either. |
+| 39 | A forged "success" row reset the lockout count. | Failures are counted for the whole 15 minutes; a success no longer resets them. |
+
+**App level**
+
+| # | Loophole | Fix |
+|---|---|---|
+| 40 | Swing renders any label text starting with `<html>` as HTML, including a typed incident title. One user could change what another sees, or make the app fetch an image from the internet. | `ui/Html`: user text is escaped inside our own HTML; tables and headings that show user text have HTML switched off. Tested. |
+| 41 | An unknown username was refused in about 1 ms and a wrong password in about 300 ms (PBKDF2), so a stopwatch revealed which usernames exist. | A dummy PBKDF2 runs for unknown users. Tested by timing. |
+
 ## 6. Fact check, corrected
 
 - OWASP Top 10 for LLM Applications 2026: published 3 Aug 2026 and formally presented 1–2 Sep 2026. Earlier I told you "6 Aug". That was wrong. Your 5 Sep LinkedIn post saying it came out around 1 Sep is close enough; do not change it to 6 Aug.
@@ -101,6 +153,9 @@ Pathivu joins the two halves in one record: AI failure analysis on one side, Ind
 - Mapping suggestions are keyword and flag based, not AI. They are suggestions only.
 - No sector regulators (RBI, SEBI, IRDAI) yet.
 - Evidence files are fingerprinted, not stored. Pathivu proves a file is unchanged; it does not keep the file.
+- **The database trusts the user id the app writes.** Every `*_by` and `actor_id` column, and so every separation-of-duties check, believes the app about who is acting. A compromised app could write "approved by Kavya". What the database guarantees is that such a claim is permanent and sits in the hash-chained trail. Closing this fully needs one database login per person (or definer-rights procedures), which is beyond a semester project.
+- The lockout can be used to annoy: five wrong guesses lock a real user out for 15 minutes. That is the usual trade-off.
+- The clock guard allows 5 seconds of difference (a statement can wait that long for a lock). A server started with `--sysdate-is-now` would make the guard blind; do not run it that way.
 
 ## 8. Four-member split (matches the packages)
 
@@ -109,6 +164,6 @@ Pathivu joins the two halves in one record: AI failure analysis on one side, Ind
 | 1 · Incident core | Incident hierarchy, IncidentDao, workflow, register and report screens | model/Incident*, dao/IncidentDao, workflow/*, ui/ReportIncidentDialog, ui/MainFrame |
 | 2 · Frameworks | Mappers, taxonomy versions, mapping review | mapping/*, dao/TaxonomyDao, dao/MappingDao, db/seed.sql (taxonomy part) |
 | 3 · Obligations | Rules, clocks, notices, IST handling, rule preview | rules/*, dao/ClockDao, dao/NotificationDao, dao/RuleDao, service/ObligationService, util/Times |
-| 4 · Accountability | Audit chain and anchors, evidence hashing, passwords and lockout, triggers, grants, tests, website proof | security/*, dao/AuditDao, dao/EvidenceDao, dao/LoginDao, db/schema.sql triggers, db/grants.sql, test/*, docs/ (site) |
+| 4 · Accountability | Audit chain and anchors, evidence hashing, passwords and lockout, triggers and guard procedures, grants, tests, website proof | security/*, ui/Html, dao/AuditDao, dao/EvidenceDao, dao/LoginDao, db/schema.sql triggers, db/grants.sql, test/*, docs/ (site) |
 
 Each member should be able to explain every line of their part and the schema as a whole.
