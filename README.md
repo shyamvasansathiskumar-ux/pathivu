@@ -122,6 +122,6 @@ scripts/export-site-data.sh     # vectors.json, refusals.jsonl, audit-sample.jso
 
 ## Credits
 
-Shyam Kumar, CSE, Rajalakshmi Engineering College, 2026. OOP + DBMS semester project. Built with Claude as a pair programmer. MIT licence.
+Shyam Kumar, CSE, Rajalakshmi Engineering College, 2026. OOP + DBMS semester project. 
 
 Legal points are research summaries, not legal advice.
