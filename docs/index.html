@@ -7,7 +7,7 @@
 <meta name="description" content="Pathivu (பதிவு, Tamil for record) is a Java and MySQL incident register for AI failures. It maps each incident to OWASP, MITRE ATLAS and NIST, and runs India's reporting deadlines from the moment the organisation became aware. Try the rule engine live in your browser.">
 <meta name="theme-color" content="#e8e1d3">
 <meta property="og:title" content="Pathivu · the AI incident register that watches the legal clock">
-<meta property="og:description" content="When an AI system breaks something, a legal clock may already be running. Java, MySQL, 28 triggers, 66 tests. By Shyam Kumar.">
+<meta property="og:description" content="When an AI system breaks something, a legal clock may already be running. Java, MySQL, 36 triggers, 106 tests. By Shyam Kumar.">
 <meta property="og:image" content="https://shyamvasansathiskumar-ux.github.io/pathivu/og.jpg">
 <meta property="og:url" content="https://shyamvasansathiskumar-ux.github.io/pathivu/">
 <meta property="og:type" content="website">
@@ -38,6 +38,7 @@
       <li><a href="#refused">The database</a></li>
       <li><a href="#tamper">Tamper lab</a></li>
       <li><a href="#proof">Proof</a></li>
+      <li><a href="learn.html">New here?</a></li>
     </ul>
     <a class="btn sm ghost" href="https://github.com/shyamvasansathiskumar-ux/pathivu" target="_blank" rel="noopener">Source <span class="arr">↗</span></a>
   </div>
@@ -62,10 +63,11 @@
       <div class="hero-cta" data-intro>
         <a class="btn acc" href="#try">File an incident in your browser <span class="arr">→</span></a>
         <a class="btn ghost" href="#refused">See the database refuse</a>
+        <a class="btn ghost" href="learn.html">New to this? The plain-English guide</a>
       </div>
     </div>
     <div class="wrap hero-meta" data-intro>
-      <span class="label bare">66 tests</span><span class="label bare">28 triggers</span><span class="label bare">≈3,600 lines of Java</span><span class="label bare scroll-cue">Scroll</span>
+      <span class="label bare">106 tests</span><span class="label bare">36 triggers</span><span class="label bare">≈3,700 lines of Java</span><span class="label bare scroll-cue">Scroll</span>
     </div>
   </section>
 
@@ -215,9 +217,11 @@
       <div class="sec-head">
         <p class="label" data-scramble>05 · Rules live in the database</p>
         <h2 class="h1" data-split>Java asks nicely. <em>MySQL says no.</em></h2>
-        <p class="body" data-rise>Every important rule is enforced twice: in Java for a clear message, and in MySQL with constraints, 28 triggers and a restricted account, so a bug, a SQL injection or someone typing SQL by hand still can't break it. Below are real attacks from the test suite, run as the app's own database account, with MySQL's actual replies.</p>
+        <p class="body" data-rise>Every important rule is enforced twice: in Java for a clear message, and in MySQL with constraints, 36 triggers and a restricted account, so a bug, a SQL injection or someone typing SQL by hand still can't break it. Below are real attacks from the test suite, run as the app's own database account, with MySQL's actual replies.</p>
+        <p class="body" data-rise>The newest ones are sneakier. Any connection can quietly change its own settings: <code>SET timestamp</code> turns back the clock the database uses for "sent at", and <code>foreign_key_checks = 0</code> or <code>sql_mode = ''</code> switch off checks. Each trigger now asks first whether the session is being honest.</p>
       </div>
       <div class="refusals" id="refusals" data-rise></div>
+      <button type="button" class="btn ghost sm more" id="refusalsMore" hidden>Show all <b>–</b> refusals</button>
     </div>
   </section>
 
@@ -257,7 +261,7 @@
         <p class="label" data-scramble>07 · Proof</p>
         <div class="tally"><b id="passed">–</b><span id="tallytext">cases checked in this browser</span></div>
         <p class="body" data-rise>The Java engine generated <span id="caseCount">240</span> random incidents, from 2022 to 2027, and wrote down its answers: which clocks start and when they fall due, which mappings it suggests, and what blocks the next workflow step. The JavaScript on this page has just answered the same cases. They have to match exactly.</p>
-        <p class="body" data-rise>The Java project itself runs <b>66 tests</b>: 19 on the logic, 16 on the services against MySQL, and 31 attacks on the database.</p>
+        <p class="body" data-rise>The Java project itself runs <b>106 tests</b>: 23 on the logic, 20 on the services against MySQL, and 63 attacks on the database.</p>
       </div>
       <div class="col-r">
         <div class="vectors card" data-rise>
@@ -289,7 +293,7 @@
         </div>
       </div>
       <div class="col-r">
-<pre class="term" data-rise><span class="dim">$</span> mysql -u root -p &lt; db/schema.sql   <span class="dim"># 21 tables, 28 triggers, 2 views</span>
+<pre class="term" data-rise><span class="dim">$</span> mysql -u root -p &lt; db/schema.sql   <span class="dim"># 21 tables, 36 triggers, 2 views</span>
 <span class="dim">$</span> mysql -u root -p &lt; db/seed.sql
 <span class="dim">$</span> mysql -u root -p &lt; db/grants.sql   <span class="dim"># the app gets no DELETE, ever</span>
 <span class="dim">$</span> scripts/build.sh
@@ -299,7 +303,8 @@
   PASS  cannot change aware_at
   PASS  cannot start a DPDP clock before Rule 7 is in force
   PASS  a full re-hashed rewrite by root fools verify() but not a saved anchor
-  <span class="ok">66 passed, 0 failed</span>
+  PASS  a session with a faked clock cannot send a notice or sign in
+  <span class="ok">106 passed, 0 failed</span>
 <span class="dim">$</span> scripts/run.sh                      <span class="dim"># sign in as arjun</span></pre>
       </div>
     </div>
@@ -312,6 +317,7 @@
     <div class="row">
       <div class="links">
         <a class="btn acc" href="https://github.com/shyamvasansathiskumar-ux/pathivu" target="_blank" rel="noopener">Source on GitHub <span class="arr">↗</span></a>
+        <a class="btn ghost" href="learn.html">The plain-English guide <span class="arr">→</span></a>
         <a class="btn ghost" href="https://shyamvasansathiskumar-ux.github.io/kaaval/">Kaaval, the agent guard <span class="arr">→</span></a>
         <a class="btn ghost" href="https://shyamvasansathiskumar-ux.github.io/">All projects <span class="arr">→</span></a>
       </div>

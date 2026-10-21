@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathivu in Plain Words</title>
+<meta name="description" content="What Pathivu does, why it exists and how it protects its own records, explained for someone with no background in cyber security, law or databases. About ten minutes to read.">
+<meta name="theme-color" content="#e8e1d3">
+<meta property="og:title" content="Pathivu in Plain Words">
+<meta property="og:description" content="An AI incident register, explained for anyone: the deadline, the record that cannot be quietly changed, and the two-person rule.">
+<meta property="og:image" content="https://shyamvasansathiskumar-ux.github.io/pathivu/og.jpg">
+<meta property="og:url" content="https://shyamvasansathiskumar-ux.github.io/pathivu/learn.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://shyamvasansathiskumar-ux.github.io/pathivu/learn.html">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23e8e1d3'/%3E%3Crect x='17' y='14' width='30' height='36' rx='4' fill='%239e1b32'/%3E%3Crect x='23' y='22' width='18' height='3' fill='%23f4efe6'/%3E%3Crect x='23' y='29' width='18' height='3' fill='%23f4efe6'/%3E%3Crect x='23' y='36' width='11' height='3' fill='%23f4efe6'/%3E%3C/svg%3E">
+<link rel="preload" href="cormorant.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="geist.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* The plain-words page: a quieter reading layout on the same sand-and-seal palette. */
+  .learn main { padding-top: 72px; }
+  .learn .nav { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  .learn .nav .back { font: 500 11.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; }
+  .learn .nav .back:hover { color: var(--acc); }
+
+  .l-hero { padding: clamp(56px, 10vh, 120px) 0 clamp(40px, 7vh, 80px); border-bottom: 1px solid var(--line); }
+  .l-hero .h1 { max-width: 13ch; margin-top: 22px; }
+  .l-hero .lede { max-width: 46ch; margin-top: 28px; }
+  .l-meta { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 34px; }
+  .l-meta span { font: 500 11.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  .l-meta span b { color: var(--ink); font-weight: 500; }
+
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 30px; }
+  .toc a { text-decoration: none; display: inline-flex; align-items: center; }
+
+  .ch { padding: clamp(56px, 9vh, 104px) 0; border-bottom: 1px solid var(--line); scroll-margin-top: 72px; }
+  .ch-in { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 8fr); gap: clamp(20px, 4vw, 64px); }
+  .ch-in > * { min-width: 0; }
+  .ch-side { display: flex; flex-direction: column; gap: 14px; }
+  .ch-side .n { font: 300 italic clamp(44px, 5vw, 76px)/1 var(--serif); color: var(--acc); }
+  .ch-main { display: grid; gap: 26px; }
+  .ch-main .h2 { max-width: 18ch; }
+  .read { font-size: clamp(17px, 1.25vw, 19px); line-height: 1.7; color: var(--ink-2); max-width: 64ch; margin: 0; text-wrap: pretty; }
+  .read strong { color: var(--ink); font-weight: 500; }
+  .read + .read { margin-top: -6px; }
+
+  .say { margin: 0; padding: 26px 30px; border-left: 3px solid var(--acc); background: color-mix(in srgb, var(--paper) 80%, transparent); border-radius: 0 var(--r) var(--r) 0;
+    font: 400 clamp(24px, 2.3vw, 34px)/1.25 var(--serif); color: var(--ink); max-width: 34ch; text-wrap: balance; }
+
+  /* timeline */
+  .story { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: color-mix(in srgb, var(--paper) 70%, transparent); }
+  .story > div { padding: 22px 20px 24px; display: grid; gap: 8px; align-content: start; border-right: 1px solid var(--line); }
+  .story > div:last-child { border-right: 0; background: var(--acc); color: var(--acc-ink); }
+  .story .t { font: 500 22px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .story .k { font: 500 11px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+  .story p { margin: 0; font-size: 15px; line-height: 1.5; }
+  .story > div:last-child p, .story > div:last-child .k { color: rgba(244, 239, 230, .88); }
+
+  .tryline { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; padding: 22px 24px; }
+  .tryline label { font: 500 11.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+  .tryline input[type="time"] { width: 150px; height: 46px; }
+  .tryline output { font: 500 18px/1.4 var(--sans); color: var(--ink); }
+  .tryline output b { color: var(--acc); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* word cards */
+  .words { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .word { padding: 22px 24px; display: grid; gap: 8px; align-content: start; }
+  .word h3 { margin: 0; font: 400 26px/1.1 var(--serif); }
+  .word h3 small { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); margin-left: 8px; vertical-align: middle; }
+  .word p { margin: 0; font-size: 15.5px; line-height: 1.55; color: var(--ink-2); }
+  .word .like { font-style: italic; color: var(--ink); }
+
+  /* locks */
+  .locks { display: grid; gap: 14px; }
+  .lock { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px 20px; padding: 22px 24px; align-items: start; }
+  .lock .ic { grid-row: span 2; width: 52px; height: 52px; border-radius: 14px; background: var(--ink); color: var(--bg); display: grid; place-items: center; font: 400 italic 26px/1 var(--serif); }
+  .lock h3 { margin: 0; font: 400 26px/1.15 var(--serif); }
+  .lock p { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--ink-2); max-width: 70ch; }
+  .lock p b { color: var(--ink); font-weight: 500; }
+
+  /* fingerprint chain demo */
+  .chainlab { padding: 24px; display: grid; gap: 18px; }
+  .chainlab .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .pg { border: 1px solid var(--line-2); border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; background: var(--paper); transition: border-color .3s, background .3s; }
+  .pg .k { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  .pg input { height: 42px; font-size: 14px; }
+  .pg .fp { font: 500 12.5px/1.4 var(--mono); color: var(--ink); word-break: break-all; }
+  .pg .fp small { display: block; color: var(--mute); font-weight: 400; }
+  .pg .st { font: 600 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ok); }
+  .pg.broken { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 7%, var(--paper)); }
+  .pg.broken .st { color: var(--bad); }
+  .chainlab .msg { margin: 0; font-size: 15.5px; color: var(--ink-2); min-height: 3em; }
+  .chainlab .msg b { color: var(--ink); }
+
+  /* refusals in plain words */
+  .nos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; border-top: 1px solid var(--line); }
+  .no { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: start; }
+  .no h3 { margin: 0; font: 500 16.5px/1.4 var(--sans); color: var(--ink); }
+  .no p { grid-column: 1 / -1; margin: 0; font-size: 14.5px; color: var(--ink-2); }
+  .no .pill { white-space: nowrap; }
+
+  /* parts diagram */
+  .parts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; align-items: stretch; }
+  .part { padding: 20px; display: grid; gap: 6px; align-content: start; position: relative; border: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 74%, transparent); }
+  .part:first-child { border-radius: var(--r) 0 0 var(--r); }
+  .part:last-child { border-radius: 0 var(--r) var(--r) 0; background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .part + .part { border-left: 0; }
+  .part .k { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  .part:last-child .k { color: rgba(232, 225, 211, .6); }
+  .part h3 { margin: 0; font: 400 28px/1 var(--serif); }
+  .part p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-2); }
+  .part:last-child p { color: rgba(232, 225, 211, .82); }
+  .part .arrow { position: absolute; right: -11px; top: 26px; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line-2); display: grid; place-items: center; font: 500 12px/1 var(--mono); z-index: 1; }
+
+  /* faq */
+  .faq { display: grid; border-top: 1px solid var(--line); }
+  .faq details { border-bottom: 1px solid var(--line); }
+  .faq summary { list-style: none; cursor: pointer; padding: 20px 40px 20px 0; position: relative; font: 400 clamp(21px, 1.8vw, 26px)/1.25 var(--serif); color: var(--ink); }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; position: absolute; right: 4px; top: 18px; font: 400 26px/1 var(--mono); color: var(--acc); transition: transform .3s var(--ease); }
+  .faq details[open] summary::after { transform: rotate(45deg); }
+  .faq details p { margin: 0 0 22px; max-width: 66ch; color: var(--ink-2); font-size: 16px; line-height: 1.65; }
+
+  .next { padding: clamp(64px, 10vh, 120px) 0; }
+  .next .h2 { max-width: 16ch; }
+  .next .row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+
+  @media (max-width: 960px) {
+    .ch-in { grid-template-columns: 1fr; }
+    .ch-side { flex-direction: row; align-items: baseline; gap: 16px; }
+    .story { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .story > div:nth-child(2) { border-right: 0; }
+    .story > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+    .parts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .part, .part:first-child, .part:last-child { border-radius: var(--r); border-left: 1px solid var(--line); }
+    .part:last-child { border-color: var(--ink); }
+    .part .arrow { display: none; }
+  }
+  @media (max-width: 680px) {
+    .words, .nos, .chainlab .row3 { grid-template-columns: 1fr; }
+    .story, .parts { grid-template-columns: 1fr; }
+    .story > div { border-right: 0; border-bottom: 1px solid var(--line); }
+    .lock { grid-template-columns: 1fr; }
+    .lock .ic { grid-row: auto; }
+    .say { padding: 20px 22px; }
+  }
+</style>
+</head>
+<body class="learn">
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="dot"></span>Pathivu <span class="tamil">பதிவு</span></a>
+    <a class="back" href="index.html">← The technical version</a>
+  </div>
+</header>
+
+<main>
+  <section class="l-hero">
+    <div class="wrap">
+      <p class="label">The plain-words guide</p>
+      <h1 class="h1">Pathivu, for <em>anyone.</em></h1>
+      <p class="lede">You don't need to know anything about cyber security, law or databases to read this. By the end you'll know what the project does, why it exists, and why its records can't be quietly changed.</p>
+      <div class="l-meta"><span>About <b>10 minutes</b></span><span>No jargon left unexplained</span><span>One small thing to try in each part</span></div>
+      <nav class="toc" aria-label="Parts of this guide">
+        <a class="chip" href="#one">The idea</a>
+        <a class="chip" href="#two">A story</a>
+        <a class="chip" href="#three">Eight words</a>
+        <a class="chip" href="#four">Why not a spreadsheet</a>
+        <a class="chip" href="#five">Five locks</a>
+        <a class="chip" href="#six">What it refuses</a>
+        <a class="chip" href="#seven">What it's made of</a>
+        <a class="chip" href="#eight">Questions</a>
+      </nav>
+    </div>
+  </section>
+
+  <!-- 1 -->
+  <section class="ch" id="one">
+    <div class="wrap ch-in">
+      <div class="ch-side"><span class="n">1</span><p class="label bare">The idea</p></div>
+      <div class="ch-main">
+        <h2 class="h2">A notebook <em>with a stopwatch.</em></h2>
+        <p class="say">When a company's AI does something harmful, the law can give the company a few hours to report it. Pathivu writes down what happened, works out the deadline, and makes sure nobody can change the record afterwards.</p>
+        <p class="read">Companies now use AI for real work: writing code, answering customers, sorting hospital samples. Sometimes it goes wrong. An AI assistant deletes data it shouldn't. A chatbot shows one customer another customer's phone number. A scoring system treats people from villages worse than people from cities.</p>
+        <p class="read">In India, some of these mistakes come with a <strong>legal duty to report</strong>, and a deadline. Pathivu (பதிவு, Tamil for <em>record</em>) is the tool a company would use in those first hours: to write it all down properly, to see which deadlines apply, and to prove later exactly who did what and when.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="ch" id="two">
+    <div class="wrap ch-in">
+      <div class="ch-side"><span class="n">2</span><p class="label bare">A story</p></div>
+      <div class="ch-main">
+        <h2 class="h2">Monday afternoon <em>at a ride app.</em></h2>
+        <p class="read">A ride-booking company uses an AI coding assistant. It was asked to tidy up a test database. It had more access than it needed, and it deleted the real bookings database instead. Nobody attacked anyone. It was simply a mistake. Here is how the afternoon looks to Pathivu:</p>
+        <div class="story" role="list">
+          <div role="listitem"><span class="k">It happened</span><span class="t">1:40 pm</span><p>The assistant runs the wrong command. Bookings disappear.</p></div>
+          <div role="listitem"><span class="k">Someone noticed</span><span class="t">1:55 pm</span><p>An engineer sees errors on the dashboard.</p></div>
+          <div role="listitem"><span class="k">The company knew</span><span class="t">2:00 pm</span><p>The manager is told. <b>This is the moment the clock starts.</b></p></div>
+          <div role="listitem"><span class="k">Report due</span><span class="t">8:00 pm</span><p>India's cyber security agency, CERT-In, expects a report within 6 hours.</p></div>
+        </div>
+        <p class="read">Pathivu keeps those three times separate on purpose. "When it happened", "when someone noticed" and "when the company knew" are often different, and the law counts from the last one. Once saved, <strong>none of the three can ever be edited</strong>, because moving "when the company knew" by even an hour would move the deadline too.</p>
+        <div class="card tryline">
+          <label for="knew">Try it: the company knew at</label>
+          <input class="input" id="knew" type="time" value="14:00">
+          <output id="due" for="knew">Report to CERT-In by <b>8:00 pm</b>, same day.</output>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="ch" id="three">
+    <div class="wrap ch-in">
+      <div class="ch-side"><span class="n">3</span><p class="label bare">Eight words</p></div>
+      <div class="ch-main">
+        <h2 class="h2">The only words <em>you need.</em></h2>
+        <div class="words">
+          <article class="card word"><h3>Incident</h3><p>Something that went wrong with an AI system. <span class="like">Like an accident report after a car crash.</span></p></article>
+          <article class="card word"><h3>Harm</h3><p>Who or what got hurt by it: lost data, leaked phone numbers, people treated unfairly, money lost.</p></article>
+          <article class="card word"><h3>CERT-In <small>India</small></h3><p>The government team that handles cyber security incidents. Its rule since 2022: report within 6 hours of noticing.</p></article>
+          <article class="card word"><h3>DPDP <small>India</small></h3><p>India's data protection law. From 13 May 2027 its Rule 7 says: if personal data leaks, tell the people affected and the Data Protection Board without delay.</p></article>
+          <article class="card word"><h3>Framework</h3><p>A shared list of the ways AI fails, made by experts (OWASP, MITRE ATLAS, NIST). <span class="like">Like the codes a doctor uses to name an illness, so everyone means the same thing.</span></p></article>
+          <article class="card word"><h3>Audit trail</h3><p>A diary of every action: who did what, and when. In Pathivu it can only be added to, never edited.</p></article>
+          <article class="card word"><h3>Hash</h3><p>A short fingerprint of some text, worked out by maths. Change one letter and the fingerprint changes completely. You'll try one in part 5.</p></article>
+          <article class="card word"><h3>Database</h3><p>Where the records are kept, here MySQL. <span class="like">Think of a vault with its own guards. The guards (called triggers) check every change before letting it in.</span></p></article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="ch" id="four">
+    <div class="wrap ch-in">
+      <div class="ch-side"><span class="n">4</span><p class="label bare">Why not a spreadsheet</p></div>
+      <div class="ch-main">
+        <h2 class="h2">The problem with <em>a pencil.</em></h2>
+        <p class="read">A company could keep all this in a spreadsheet. But in a spreadsheet anyone can quietly change the time a problem was found, delete an awkward row, or type "report sent at 7:55 pm" when it actually went at 9:30. Months later, when a regulator asks questions, nobody can tell what was changed.</p>
+        <p class="say">Pathivu works like an old bank ledger written in ink. You never rub anything out. A correction is a new line that says what changed and why.</p>
+        <p class="read">The important part: these rules are not only inside the app. They are built into <strong>the database itself</strong>. So even someone who skips the app and types commands into the database directly gets the same answer: no.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="ch" id="five">
+    <div class="wrap ch-in">
+      <div class="ch-side"><span class="n">5</span><p class="label bare">Five locks</p></div>
+      <div class="ch-main">
+        <h2 class="h2">How the record <em>protects itself.</em></h2>
+        <div class="locks">
+          <article class="card lock"><span class="ic">i</span><h3>Times are written in ink</h3><p>The three times in the story can't be edited. If one was wrong, a correction is added <b>beside</b> it with a reason, and the deadline stays where it was.</p></article>
+          <article class="card lock"><span class="ic">ii</span><h3>The database keeps its own clock</h3><p>When a report is marked "sent", the database writes the time itself, from its own clock. The app can't type in a nicer time. It can't even trick the database by setting its clock back: Pathivu checks for that and refuses.</p></article>
+          <article class="card lock"><span class="ic">iii</span><h3>Two people for every legal decision</h3><p>Like a cheque that needs two signatures. The person who writes a report can't approve it. The person who reported an incident can't close it or decide a deadline doesn't apply. <b>Four eyes</b>, every time.</p></article>
+          <article class="card lock"><span class="ic">iv</span><h3>Every entry carries the fingerprint of the one before</h3><p>The diary is a chain. Each entry's fingerprint is made from its own words <b>and</b> the previous entry's fingerprint. Change any old entry and every fingerprint after it stops matching. Try it below.</p></article>
+          <article class="card lock"><span class="ic">v</span><h3>A copy of the last page, kept somewhere else</h3><p>Someone with full control of the computer could rewrite an entry and then redo every fingerprint after it. So Pathivu lets you save the newest fingerprint outside the database (email it to yourself, print it). That saved copy is called an <b>anchor</b>, and a rewritten diary won't match it.</p></article>
+        </div>
+
+        <div class="card chainlab" id="chainlab">
+          <p class="label bare">Try it: a three-page diary</p>
+          <div class="row3">
+            <div class="pg" data-i="0"><span class="k">Page 1</span><input class="input" value="Meera reported the incident"><span class="fp">–</span><span class="st">matches</span></div>
+            <div class="pg" data-i="1"><span class="k">Page 2</span><input class="input" value="Arjun ruled out the 6-hour clock"><span class="fp">–</span><span class="st">matches</span></div>
+            <div class="pg" data-i="2"><span class="k">Page 3</span><input class="input" value="Kavya closed the incident"><span class="fp">–</span><span class="st">matches</span></div>
+          </div>
+          <p class="msg" id="chainMsg">Change a word on page 2. Its fingerprint changes, and page 3 no longer matches the fingerprint it was built on.</p>
+          <div class="row gap"><button type="button" class="btn sm ghost" id="chainReset">Put the words back</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="ch" id="six">
+    <div class="wrap ch-in">
+      <div class="ch-side"><span class="n">6</span><p class="label bare">What it refuses</p></div>
+      <div class="ch-main">
+        <h2 class="h2">Things people try, <em>and the answer.</em></h2>
+        <p class="read">The project comes with 106 automatic tests. 63 of them are attacks: they talk to the database directly, the way a bug or a hacker would, and try to break a rule. Every one has to be refused. Some of them, in plain words:</p>
+        <div class="nos">
+          <div class="no"><h3>Change when the company found out</h3><span class="pill bad">refused</span><p>That time starts every deadline, so it is written once.</p></div>
+          <div class="no"><h3>Set the database's clock back, then mark the report "sent"</h3><span class="pill bad">refused</span><p>The database notices its clock was changed for this session.</p></div>
+          <div class="no"><h3>Delete an incident</h3><span class="pill bad">refused</span><p>The app's database account has no permission to delete anything, anywhere.</p></div>
+          <div class="no"><h3>Approve your own report</h3><span class="pill bad">refused</span><p>Two different people, always.</p></div>
+          <div class="no"><h3>Close an incident you reported yourself</h3><span class="pill bad">refused</span><p>Someone else must check it first.</p></div>
+          <div class="no"><h3>Quietly reword what happened</h3><span class="pill bad">refused</span><p>A change to the description needs a written reason, kept forever.</p></div>
+          <div class="no"><h3>Say a missed deadline "didn't apply", afterwards</h3><span class="pill bad">refused</span><p>Once the time has passed, it stays missed, or shows as reported late.</p></div>
+          <div class="no"><h3>Edit an old diary entry</h3><span class="pill bad">refused</span><p>The diary only grows. If someone with full control forces a change, the fingerprints show it.</p></div>
+        </div>
+        <p class="read">Want to see the real database replies, word for word? They're on the <a href="index.html#refused">technical page</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="ch" id="seven">
+    <div class="wrap ch-in">
+      <div class="ch-side"><span class="n">7</span><p class="label bare">What it's made of</p></div>
+      <div class="ch-main">
+        <h2 class="h2">Four parts, <em>one job each.</em></h2>
+        <div class="parts">
+          <div class="part"><span class="k">You see</span><h3>Screens</h3><p>Windows built in Java Swing: the list of incidents, the deadlines, the diary.</p><span class="arrow" aria-hidden="true">→</span></div>
+          <div class="part"><span class="k">It decides</span><h3>Rules</h3><p>Java code that knows the laws and their start dates, and suggests framework categories.</p><span class="arrow" aria-hidden="true">→</span></div>
+          <div class="part"><span class="k">It carries</span><h3>JDBC</h3><p>The bridge that sends every change to the database as one all-or-nothing package.</p><span class="arrow" aria-hidden="true">→</span></div>
+          <div class="part"><span class="k">It guards</span><h3>MySQL</h3><p>21 tables, 36 triggers (the guards) and checks that refuse anything that would rewrite history.</p></div>
+        </div>
+        <p class="read">It was built as a second-year Java and database project at Rajalakshmi Engineering College, Chennai. The demo has four pretend people: <strong>Meera</strong> reports incidents, <strong>Arjun</strong> and <strong>Kavya</strong> review them (two of them, so there are always two sets of eyes), and <strong>Ravi</strong> can only read and check the diary.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="ch" id="eight">
+    <div class="wrap ch-in">
+      <div class="ch-side"><span class="n">8</span><p class="label bare">Questions</p></div>
+      <div class="ch-main">
+        <h2 class="h2">Things people <em>usually ask.</em></h2>
+        <div class="faq">
+          <details><summary>Is this a real product a company uses?</summary><p>Not yet. It is a working student project with pretend data. It runs, it has real tests, and the legal deadlines it uses are real, but no company depends on it.</p></details>
+          <details><summary>Does it send reports to the government?</summary><p>No. A person submits the report the official way, then records in Pathivu that it was sent. The database stamps the time.</p></details>
+          <details><summary>Does it use AI to decide things?</summary><p>No. It suggests categories using simple, readable rules, and a person must confirm each one. It also never decides whether the law was broken. It starts clocks cautiously ("unsure" counts as "yes"), and a named reviewer decides.</p></details>
+          <details><summary>Why would anyone change a record on purpose?</summary><p>Because a missed deadline can mean fines and bad news stories. The easiest cover-up is to change one time or one word after the fact. Pathivu is designed so that this is either impossible or visible.</p></details>
+          <details><summary>Can someone with full control of the computer still cheat?</summary><p>They can switch the guards off. That is the honest limit of any database. But the fingerprint chain shows exactly which entry changed, and a saved anchor catches even a complete rewrite. Both are tested.</p></details>
+          <details><summary>Why the Tamil name?</summary><p>பதிவு (pathivu) means "record" or "registration" in Tamil. The project was built in Chennai, and keeping a record is its whole job.</p></details>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="next">
+    <div class="wrap">
+      <p class="label">Next</p>
+      <h2 class="h2">Ready for the <em>technical version?</em></h2>
+      <p class="read" style="margin-top:22px">File a pretend incident and watch the deadlines appear, see the database's real replies, and try to tamper with the real diary yourself.</p>
+      <div class="row">
+        <a class="btn acc" href="index.html">The project page <span class="arr">→</span></a>
+        <a class="btn ghost" href="https://github.com/shyamvasansathiskumar-ux/pathivu" target="_blank" rel="noopener">The code on GitHub <span class="arr">↗</span></a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <small>Shyam Kumar · REC Chennai · 2026 · Built with Claude as a pair programmer. Legal points are summaries, not legal advice.</small>
+      <a class="btn ghost sm" href="https://shyamvasansathiskumar-ux.github.io/">All projects <span class="arr">→</span></a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  /* 2 · the deadline */
+  const knew = document.getElementById("knew"), due = document.getElementById("due");
+  const fmt = (h, m) => `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+  const upd = () => {
+    const [h, m] = (knew.value || "14:00").split(":").map(Number);
+    const t = h * 60 + m + 360, nh = Math.floor(t / 60) % 24, nm = t % 60;
+    due.innerHTML = `Report to CERT-In by <b>${fmt(nh, nm)}</b>${t >= 1440 ? ", the next day" : ", same day"}.`;
+  };
+  knew.addEventListener("input", upd); upd();
+
+  /* 5 · the fingerprint chain */
+  const pages = [...document.querySelectorAll("#chainlab .pg")];
+  const inputs = pages.map((p) => p.querySelector("input"));
+  const original = inputs.map((i) => i.value);
+  const msg = document.getElementById("chainMsg");
+  const enc = new TextEncoder();
+  const sha = async (s) => {
+    const b = await crypto.subtle.digest("SHA-256", enc.encode(s));
+    return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+  };
+  let saved = null;   // fingerprints as first written: what each page was built on
+  const draw = async () => {
+    if (!(window.crypto && crypto.subtle)) { msg.textContent = "This browser can't compute fingerprints here, but the idea is the same."; return; }
+    let prev = "0".repeat(64);
+    const now = [];
+    for (let i = 0; i < pages.length; i++) { prev = await sha(prev + "|" + inputs[i].value); now.push(prev); }
+    if (!saved) saved = now.slice();
+    let firstBad = -1;
+    pages.forEach((p, i) => {
+      const changed = now[i] !== saved[i];
+      if (changed && firstBad < 0) firstBad = i;
+      p.classList.toggle("broken", changed);
+      p.querySelector(".fp").innerHTML = `${now[i].slice(0, 16)}…<small>${changed ? "was " + saved[i].slice(0, 16) + "…" : "fingerprint"}</small>`;
+      p.querySelector(".st").textContent = changed ? (i === firstBad ? "changed" : "chain broken") : "matches";
+    });
+    msg.innerHTML = firstBad < 0
+      ? "Change a word on page 2. Its fingerprint changes, and page 3 no longer matches the fingerprint it was built on."
+      : `<b>Page ${firstBad + 1} was changed.</b> ${firstBad < pages.length - 1 ? "Every page after it now points at a fingerprint that no longer exists, so the change can't hide." : "Its fingerprint no longer matches the saved anchor."}`;
+  };
+  inputs.forEach((i) => i.addEventListener("input", draw));
+  document.getElementById("chainReset").addEventListener("click", () => { inputs.forEach((i, k) => { i.value = original[k]; }); draw(); });
+  draw();
+
+  /* nav shadow once scrolled */
+  const nav = document.querySelector(".nav");
+  addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 8), { passive: true });
+})();
+</script>
+</body>
+</html>

@@ -139,11 +139,23 @@
   /* ---------------- refusals (real output of the Java test suite) ---------------- */
   load("refusals.jsonl").then((r) => r.text()).then((txt) => {
     const rows = txt.trim().split("\n").map((l) => JSON.parse(l));
-    $("refusals").innerHTML = rows.map((x) => {
-      const sql = x.sql.length > 170 ? x.sql.slice(0, 167) + "…" : x.sql;
+    const card = (x) => {
+      const sql = x.sql.length > 240 ? x.sql.slice(0, 237) + "…" : x.sql;
       return `<article class="refusal"><h3>${esc(x.test.charAt(0).toUpperCase() + x.test.slice(1))}</h3><pre>${esc(sql)}</pre>
         <p class="reply"><small>MySQL ${x.code} · ${esc(x.state)}</small>${esc(x.message)}</p></article>`;
-    }).join("");
+    };
+    const FIRST = 10;
+    $("refusals").innerHTML = rows.slice(0, FIRST).map(card).join("");
+    const more = $("refusalsMore");
+    if (more && rows.length > FIRST) {
+      more.hidden = false;
+      more.querySelector("b").textContent = rows.length;
+      more.addEventListener("click", () => {
+        $("refusals").insertAdjacentHTML("beforeend", rows.slice(FIRST).map(card).join(""));
+        more.hidden = true;
+        if (window.ScrollTrigger) ScrollTrigger.refresh();
+      }, { once: true });
+    }
   }).catch(() => { $("refusals").innerHTML = '<p class="body">Could not load the refusals file.</p>'; });
 
   /* ---------------- tamper lab ---------------- */

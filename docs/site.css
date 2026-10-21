@@ -157,3 +157,8 @@ input[type="range"] { width: 100%; accent-color: var(--acc); height: 28px; }
 .limits .label { color: var(--acc); margin-bottom: 10px; }
 .term { font-size: 13px; }
 @media (max-width: 600px) { .term { font-size: 11.5px; padding: 18px; } }
+
+/* pass 3: refusals list opens in two steps */
+.refusals + .more { margin-top: 28px; --t: var(--bg); color: var(--bg); border-color: rgba(232, 225, 211, .32); }
+.refusals + .more:hover { border-color: var(--bg); }
+.refusals + .more[hidden] { display: none; }
